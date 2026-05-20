@@ -146,7 +146,8 @@ CUDA_VISIBLE_DEVICES=0 uv run agentrl-infra run-model-action-bench \
   --models Qwen/Qwen3-4B \
   --tasks click-button,enter-text,search-engine \
   --seeds 1000,1001,1002 \
-  --prompt-protocols default,no_thinking
+  --prompt-protocols default,no_thinking \
+  --max-new-tokens 384
 ```
 
 Run the local experiment suite and generate paper-ready CSV/LaTeX tables:

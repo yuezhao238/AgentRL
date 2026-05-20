@@ -412,14 +412,15 @@ records request tokens, generated tokens, log-probabilities, proposed actions,
 tool execution, rewards, and typed failures in one event stream.
 
 This experiment exposed a systems failure mode that is invisible in ordinary
-task-success reporting. With the default Qwen3 thinking template, the model
-spent the 96-token budget emitting reasoning text and produced zero parseable
-actions. When the runtime disables thinking in the chat template for structured
-action generation, the same model solves all nine episodes, with 9/9 parsed
-actions and 9/9 successful executions. This supports a concrete runtime
-requirement: rollout workers must control chat-template and decoding protocol
-per action channel, not simply call a model endpoint and hope for a valid tool
-call.
+task-success reporting. At a 96-token action budget, the default Qwen3 thinking
+template produces 0/9 parseable actions because the budget is consumed by
+reasoning text. Increasing the budget to 384 tokens recovers 7/9 successful
+executions, but it emits 3096 generated tokens for the nine episodes and still
+leaves two invalid-action failures. The thinking-disabled structured action
+protocol solves 9/9 episodes at both budgets while emitting only 727 generated
+tokens. This supports a concrete runtime requirement: rollout workers must
+control chat-template and decoding protocol per action channel, not simply call
+a model endpoint and hope for a valid tool call.
 
 \begin{table}[t]
 \centering
@@ -428,7 +429,7 @@ call.
 \input{tables/model_action_summary.tex}
 }
 \caption{Qwen3-4B as a browser-action policy on MiniWoB contract tasks under
-default and thinking-disabled structured action protocols.}
+two token budgets and two action-channel protocols.}
 \label{tab:model-action-results}
 \end{table}
 

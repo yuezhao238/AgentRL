@@ -74,6 +74,7 @@ class ExperimentSuiteConfig(BaseModel):
     model_action_seeds: list[int] = Field(default_factory=lambda: [1000])
     model_action_prompt_protocols: list[str] = Field(default_factory=lambda: ["no_thinking"])
     model_action_max_new_tokens: int = 96
+    model_action_token_budgets: list[int] = Field(default_factory=list)
 
 
 class ExperimentSuiteReport(BaseModel):
@@ -208,16 +209,33 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     model_action_summary_path: Path | None = None
     if config.model_action_model_ids:
         model_action_dir = suite_dir / "model_action"
-        run_model_action_benchmark(
-            output_dir=model_action_dir,
-            run_id="action_smoke",
-            model_ids=config.model_action_model_ids,
-            task_names=config.model_action_tasks,
-            seeds=config.model_action_seeds,
-            prompt_protocols=config.model_action_prompt_protocols,
-            max_new_tokens=config.model_action_max_new_tokens,
+        token_budgets = config.model_action_token_budgets or [
+            config.model_action_max_new_tokens
+        ]
+        combined_summaries = []
+        for max_new_tokens in token_budgets:
+            combined_summaries.extend(
+                run_model_action_benchmark(
+                    output_dir=model_action_dir,
+                    run_id=f"action_budget_{max_new_tokens}",
+                    model_ids=config.model_action_model_ids,
+                    task_names=config.model_action_tasks,
+                    seeds=config.model_action_seeds,
+                    prompt_protocols=config.model_action_prompt_protocols,
+                    max_new_tokens=max_new_tokens,
+                )
+            )
+        combined_dir = model_action_dir / "action_sweep"
+        combined_dir.mkdir(parents=True, exist_ok=True)
+        model_action_summary_path = combined_dir / "model_action_summary.json"
+        model_action_summary_path.write_text(
+            json.dumps(
+                [summary.model_dump(mode="json") for summary in combined_summaries],
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        model_action_summary_path = model_action_dir / "action_smoke" / "model_action_summary.json"
 
     rows = build_summary_rows({name: Path(path) for name, path in failurebench_runs.items()})
     table_dir = suite_dir / "tables"

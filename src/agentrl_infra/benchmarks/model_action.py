@@ -27,6 +27,7 @@ DEFAULT_ACTION_PROMPT_PROTOCOLS: list[ActionPromptProtocol] = ["no_thinking"]
 class ModelActionEpisodeRecord(BaseModel):
     model_id: str
     prompt_protocol: str
+    max_new_tokens: int
     task_name: str
     seed: int
     success: bool
@@ -44,6 +45,7 @@ class ModelActionEpisodeRecord(BaseModel):
 class ModelActionSummary(BaseModel):
     model_id: str
     prompt_protocol: str
+    max_new_tokens: int
     episode_count: int
     success_count: int
     parsed_action_count: int
@@ -192,6 +194,7 @@ def run_model_action_with_loaded_model(
     return ModelActionSummary(
         model_id=model_id,
         prompt_protocol=prompt_protocol,
+        max_new_tokens=max_new_tokens,
         episode_count=len(records),
         success_count=sum(1 for record in records if record.success),
         parsed_action_count=sum(1 for record in records if record.parsed_action),
@@ -260,6 +263,7 @@ def _run_action_episode(
         return _record(
             model_id=model_id,
             prompt_protocol=prompt_protocol,
+            max_new_tokens=max_new_tokens,
             task_name=task_name,
             seed=seed,
             generated=generated,
@@ -286,6 +290,7 @@ def _run_action_episode(
     return _record(
         model_id=model_id,
         prompt_protocol=prompt_protocol,
+        max_new_tokens=max_new_tokens,
         task_name=task_name,
         seed=seed,
         generated=generated,
@@ -425,6 +430,7 @@ def _record(
     *,
     model_id: str,
     prompt_protocol: str,
+    max_new_tokens: int,
     task_name: str,
     seed: int,
     generated: dict[str, Any],
@@ -439,6 +445,7 @@ def _record(
     return ModelActionEpisodeRecord(
         model_id=model_id,
         prompt_protocol=prompt_protocol,
+        max_new_tokens=max_new_tokens,
         task_name=task_name,
         seed=seed,
         success=success,

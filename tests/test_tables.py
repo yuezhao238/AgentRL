@@ -162,6 +162,7 @@ def test_render_model_action_latex() -> None:
             ModelActionTableRow(
                 model_id="Qwen/Qwen3-4B",
                 prompt_protocol="no_thinking",
+                max_new_tokens=384,
                 episodes=3,
                 successes=2,
                 parsed_actions=3,
@@ -178,4 +179,5 @@ def test_render_model_action_latex() -> None:
 
     assert "Qwen3-4B" in latex
     assert "no\\_thinking" in latex
+    assert "384" in latex
     assert "Parse" in latex

@@ -102,14 +102,14 @@ agent RL rollouts.
   - [x] 21.54 generated tokens/sec after model load
   - [x] mean generated-token logprob -0.103, min logprob -1.331
   - [x] generated-token event traces include `logprobs`
-- [x] Real model-to-action MiniWoB contract smoke：
-  - [x] Qwen3-4B action protocol ablation: 3 tasks x 3 seeds x 2 protocols = 18 episodes
-  - [x] default thinking protocol: 0/9 parsed actions, 0/9 success, 9 invalid-action failures
-  - [x] thinking-disabled structured action protocol: 9/9 parsed actions, 9/9 success, 0 invalid-action failures
-  - [x] default protocol: 864 generated tokens, 26.30 tokens/sec, mean logprob -0.031
-  - [x] no-thinking protocol: 727 generated tokens, 30.49 tokens/sec, mean logprob -0.000
+- [x] Real model-to-action MiniWoB contract token-budget sweep：
+  - [x] Qwen3-4B action protocol ablation: 3 tasks x 3 seeds x 2 protocols x 2 budgets = 36 episodes
+  - [x] 96-token default thinking protocol: 0/9 parsed actions, 0/9 success, 9 invalid-action failures
+  - [x] 96-token no-thinking protocol: 9/9 parsed actions, 9/9 success, 727 generated tokens
+  - [x] 384-token default thinking protocol: 7/9 parsed actions, 7/9 success, 2 invalid-action failures, 3096 generated tokens
+  - [x] 384-token no-thinking protocol: 9/9 parsed actions, 9/9 success, 727 generated tokens
   - [x] traces include model request/response, proposed action, tool execution, reward, and typed failure events
-  - [x] conclusion: structured action channels require runtime-level chat-template/protocol control
+  - [x] conclusion: structured action channels require runtime-level chat-template/protocol and token-budget control
 
 ## 1. MLSys 主线
 

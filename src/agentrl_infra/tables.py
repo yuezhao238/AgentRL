@@ -96,6 +96,7 @@ class ModelGenerationTableRow(BaseModel):
 class ModelActionTableRow(BaseModel):
     model_id: str
     prompt_protocol: str
+    max_new_tokens: int
     episodes: int
     successes: int
     parsed_actions: int
@@ -345,6 +346,7 @@ def build_model_action_rows(path: Path) -> list[ModelActionTableRow]:
             ModelActionTableRow(
                 model_id=summary.model_id,
                 prompt_protocol=summary.prompt_protocol,
+                max_new_tokens=summary.max_new_tokens,
                 episodes=episodes,
                 successes=summary.success_count,
                 parsed_actions=summary.parsed_action_count,
@@ -484,15 +486,16 @@ def render_model_generation_latex(rows: list[ModelGenerationTableRow]) -> str:
 
 def render_model_action_latex(rows: list[ModelActionTableRow]) -> str:
     lines = [
-        "\\begin{tabular}{llrrrrrr}",
+        "\\begin{tabular}{llrrrrrrr}",
         "\\toprule",
-        "Model & Protocol & Success & Parse & Invalid & No Prog. & Tok/s & Mean Logp \\\\",
+        "Model & Protocol & Budget & Success & Parse & Invalid & No Prog. & Tok/s & Mean Logp \\\\",
         "\\midrule",
     ]
     for row in rows:
         lines.append(
             f"{_escape_latex(_short_model_id(row.model_id))} & "
             f"{_escape_latex(row.prompt_protocol)} & "
+            f"{row.max_new_tokens} & "
             f"{row.successes}/{row.episodes} & {row.parsed_actions}/{row.episodes} & "
             f"{row.invalid_actions} & {row.no_progress} & "
             f"{row.tokens_per_second:.2f} & {row.mean_logprob:.3f} \\\\"

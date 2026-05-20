@@ -1,3 +1,5 @@
-model_id,prompt_protocol,episodes,successes,parsed_actions,success_rate,parse_rate,invalid_actions,no_progress,generated_tokens,tokens_per_second,mean_logprob
-Qwen/Qwen3-4B,default,9,0,0,0.0,0.0,9,0,864,26.300044794330628,-0.031135599280789572
-Qwen/Qwen3-4B,no_thinking,9,9,9,1.0,1.0,0,0,727,30.48561573802291,-0.0003332518136199221
+model_id,prompt_protocol,max_new_tokens,episodes,successes,parsed_actions,success_rate,parse_rate,invalid_actions,no_progress,generated_tokens,tokens_per_second,mean_logprob
+Qwen/Qwen3-4B,default,96,9,0,0,0.0,0.0,9,0,864,28.054976625662743,-0.031135599280789572
+Qwen/Qwen3-4B,no_thinking,96,9,9,9,1.0,1.0,0,0,727,28.20225551943205,-0.0003332518136199221
+Qwen/Qwen3-4B,default,384,9,7,7,0.7777777777777778,0.7777777777777778,2,0,3096,34.56878830997503,-0.03770706084160367
+Qwen/Qwen3-4B,no_thinking,384,9,9,9,1.0,1.0,0,0,727,34.11353110783823,-0.0003332518136199221
