@@ -14,18 +14,22 @@ from .artifacts import (
 from .baselines import RuntimeBaseline, evaluate_failurebench_baseline
 from .benchmarks.failurebench import run_failurebench_scheduled
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
 from .integrations.miniwob import MINIWOB_20_TASKS, run_miniwob_contract_subset
 from .metrics import save_metrics
 from .tables import (
     build_lifecycle_rows,
     build_miniwob_contract_rows,
     build_summary_rows,
+    build_throughput_rows,
     write_lifecycle_csv,
     write_lifecycle_latex,
     write_miniwob_contract_csv,
     write_miniwob_contract_latex,
     write_summary_csv,
     write_summary_latex,
+    write_throughput_csv,
+    write_throughput_latex,
 )
 
 
@@ -47,6 +51,7 @@ class ExperimentSuiteConfig(BaseModel):
             "repeated_action",
         ]
     )
+    throughput_workers: int = 8
 
 
 class ExperimentSuiteReport(BaseModel):
@@ -54,6 +59,7 @@ class ExperimentSuiteReport(BaseModel):
     failurebench_runs: dict[str, str] = Field(default_factory=dict)
     lifecycle_runs: dict[str, str] = Field(default_factory=dict)
     miniwob_runs: dict[str, str] = Field(default_factory=dict)
+    throughput_runs: dict[str, str] = Field(default_factory=dict)
     tables: dict[str, str] = Field(default_factory=dict)
 
 
@@ -138,6 +144,19 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
         )
         miniwob_runs[policy_name] = str(miniwob_dir / policy_name / "summary.json")
 
+    throughput_dir = suite_dir / "throughput"
+    throughput_runs: dict[str, str] = {}
+    for policy in ThroughputPolicy:
+        run_throughput_benchmark(
+            policy=policy,
+            worker_count=config.throughput_workers,
+            output_dir=throughput_dir,
+            run_id=policy.value,
+        )
+        throughput_runs[policy.value] = str(
+            throughput_dir / policy.value / "throughput_summary.json"
+        )
+
     rows = build_summary_rows({name: Path(path) for name, path in failurebench_runs.items()})
     table_dir = suite_dir / "tables"
     csv_path = table_dir / "failurebench_summary.csv"
@@ -161,11 +180,20 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     write_miniwob_contract_csv(miniwob_rows, miniwob_csv_path)
     write_miniwob_contract_latex(miniwob_rows, miniwob_tex_path)
 
+    throughput_rows = build_throughput_rows(
+        {name: Path(path) for name, path in throughput_runs.items()}
+    )
+    throughput_csv_path = table_dir / "throughput_summary.csv"
+    throughput_tex_path = table_dir / "throughput_summary.tex"
+    write_throughput_csv(throughput_rows, throughput_csv_path)
+    write_throughput_latex(throughput_rows, throughput_tex_path)
+
     report = ExperimentSuiteReport(
         suite_dir=str(suite_dir),
         failurebench_runs=failurebench_runs,
         lifecycle_runs=lifecycle_runs,
         miniwob_runs=miniwob_runs,
+        throughput_runs=throughput_runs,
         tables={
             "failurebench_summary_csv": str(csv_path),
             "failurebench_summary_tex": str(tex_path),
@@ -173,6 +201,8 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
             "lifecycle_summary_tex": str(lifecycle_tex_path),
             "miniwob_contract_summary_csv": str(miniwob_csv_path),
             "miniwob_contract_summary_tex": str(miniwob_tex_path),
+            "throughput_summary_csv": str(throughput_csv_path),
+            "throughput_summary_tex": str(throughput_tex_path),
         },
     )
     (suite_dir / "suite_report.json").write_text(

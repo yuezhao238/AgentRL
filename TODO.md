@@ -83,6 +83,14 @@ agent RL rollouts.
   - [x] invalid selector：0/100 success, 100 invalid-action failures
   - [x] wait loop：0/100 success, 100 no-progress failures
   - [x] repeated wrong text：60/100 success, 40 no-progress failures
+- [x] Worker-pool throughput simulation：
+  - [x] FIFO / retry-only / failure-aware policies
+  - [x] metrics: useful trajectories/hour, success/hour, failed cost, zombie rate, P95/P99 latency, utilization
+  - [x] CLI：`agentrl-infra run-throughput-bench`
+  - [x] 240 requests, 8 workers:
+    - [x] FIFO：1750.5 useful/hr, 1289.0 failed cost, 7.1% zombie rate, P95 latency 36.0
+    - [x] retry-only：1581.8 useful/hr, 1561.0 failed cost, 7.1% zombie rate, P95 latency 24.0
+    - [x] failure-aware：8037.2 useful/hr, 307.0 failed cost, 0% zombie rate, P95 latency 6.0
 
 ## 1. MLSys 主线
 
@@ -138,13 +146,13 @@ agent RL rollouts.
 
 - [x] synthetic useful/cost metric
 - [x] FIFO vs failure-aware scheduled FailureBench run
-- [ ] worker-pool throughput simulator:
-  - [ ] environment lease queue
-  - [ ] per-task service-time distribution
-  - [ ] zombie session modeling
-  - [ ] P50/P95/P99 rollout latency
-  - [ ] useful trajectories/hour
-  - [ ] environment-hours/success
+- [x] worker-pool throughput simulator:
+  - [x] per-task service-time distribution
+  - [x] zombie session modeling
+  - [x] P50/P95/P99 rollout latency
+  - [x] useful trajectories/hour
+  - [x] worker utilization
+- [ ] environment-hours/success on live workers
 - [ ] real MiniWoB++ throughput run on multiple browser workers
 - [ ] GPU/LLM server backpressure model for SGLang/vLLM rollout workers
 

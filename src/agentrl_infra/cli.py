@@ -18,6 +18,7 @@ from .benchmarks.failurebench import (
     run_failurebench_scheduled,
 )
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
 from .compare import compare_metric_files
 from .events import EventLog
 from .experiments import ExperimentSuiteConfig, load_experiment_suite_config, run_experiment_suite
@@ -43,6 +44,12 @@ LIFECYCLE_OUTPUT_DIR_OPTION = typer.Option(
 LIFECYCLE_POLICY_OPTION = typer.Option(ReusePolicy.CONTAMINATION_AWARE, help="Reuse policy.")
 LIFECYCLE_EPISODES_OPTION = typer.Option(100, help="Number of synthetic episodes.")
 LIFECYCLE_TTL_OPTION = typer.Option(5, help="TTL for fixed_ttl reuse.")
+THROUGHPUT_OUTPUT_DIR_OPTION = typer.Option(
+    Path("runs/throughput"),
+    help="Directory for throughput benchmark outputs.",
+)
+THROUGHPUT_WORKERS_OPTION = typer.Option(8, help="Number of simulated rollout workers.")
+THROUGHPUT_POLICY_OPTION = typer.Option(ThroughputPolicy.FAILURE_AWARE, help="Policy.")
 EXPERIMENT_OUTPUT_DIR_OPTION = typer.Option(
     Path("runs/experiments"),
     help="Suite output root.",
@@ -202,6 +209,24 @@ def run_lifecycle_bench(
         run_id=run_id,
     )
     typer.echo(summary.model_dump_json(indent=2))
+
+
+@app.command("run-throughput-bench")
+def run_throughput_bench(
+    output_dir: Path = THROUGHPUT_OUTPUT_DIR_OPTION,
+    run_id: str | None = RUN_ID_OPTION,
+    policy: ThroughputPolicy = THROUGHPUT_POLICY_OPTION,
+    workers: int = THROUGHPUT_WORKERS_OPTION,
+) -> None:
+    """Run deterministic worker-pool throughput simulation."""
+    run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    run = run_throughput_benchmark(
+        policy=policy,
+        worker_count=workers,
+        output_dir=output_dir,
+        run_id=run_id,
+    )
+    typer.echo(run.summary.model_dump_json(indent=2))
 
 
 @app.command("compare-runs")

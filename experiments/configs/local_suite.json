@@ -34,5 +34,6 @@
     "invalid_selector",
     "wait_loop",
     "repeated_action"
-  ]
+  ],
+  "throughput_workers": 8
 }

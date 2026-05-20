@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .benchmarks.lifecycle import LifecycleSummary
+from .benchmarks.throughput import ThroughputSummary
 from .integrations.miniwob import MiniWoBRunSummary
 from .metrics import RunSummary, load_metrics, summarize_metrics
 
@@ -48,6 +49,21 @@ class MiniWoBContractTableRow(BaseModel):
     repetitive_loop: int = 0
     no_progress: int = 0
     environment_contamination: int = 0
+
+
+class ThroughputTableRow(BaseModel):
+    policy: str
+    episodes: int
+    attempts: int
+    successes: int
+    useful: int
+    makespan_units: float
+    useful_per_hour: float
+    success_per_hour: float
+    failed_cost_units: float
+    zombie_rate: float
+    p95_latency_units: float
+    utilization: float
 
 
 def build_summary_rows(inputs: dict[str, Path]) -> list[TableRow]:
@@ -164,6 +180,45 @@ def write_miniwob_contract_latex(rows: list[MiniWoBContractTableRow], path: Path
     path.write_text(render_miniwob_contract_latex(rows), encoding="utf-8")
 
 
+def build_throughput_rows(inputs: dict[str, Path]) -> list[ThroughputTableRow]:
+    rows: list[ThroughputTableRow] = []
+    for name, summary_path in inputs.items():
+        summary = ThroughputSummary.model_validate(
+            json.loads(summary_path.read_text(encoding="utf-8"))
+        )
+        rows.append(
+            ThroughputTableRow(
+                policy=name,
+                episodes=summary.episode_count,
+                attempts=summary.attempt_count,
+                successes=summary.success_count,
+                useful=summary.useful_count,
+                makespan_units=summary.makespan_units,
+                useful_per_hour=summary.useful_trajectories_per_hour,
+                success_per_hour=summary.successful_trajectories_per_hour,
+                failed_cost_units=summary.failed_cost_units,
+                zombie_rate=summary.zombie_session_rate,
+                p95_latency_units=summary.p95_latency_units,
+                utilization=summary.worker_utilization,
+            )
+        )
+    return rows
+
+
+def write_throughput_csv(rows: list[ThroughputTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(ThroughputTableRow.model_fields))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.model_dump())
+
+
+def write_throughput_latex(rows: list[ThroughputTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_throughput_latex(rows), encoding="utf-8")
+
+
 def render_summary_latex(rows: list[TableRow]) -> str:
     lines = [
         "\\begin{tabular}{lrrrrrrr}",
@@ -215,6 +270,24 @@ def render_miniwob_contract_latex(rows: list[MiniWoBContractTableRow]) -> str:
             f"{row.success_rate:.3f} & {row.replayable_rate:.3f} & "
             f"{row.mean_turn_count:.2f} & {row.agent_invalid_action} & "
             f"{row.repetitive_loop} & {row.no_progress} \\\\"
+        )
+    lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    return "\n".join(lines)
+
+
+def render_throughput_latex(rows: list[ThroughputTableRow]) -> str:
+    lines = [
+        "\\begin{tabular}{lrrrrrrr}",
+        "\\toprule",
+        "Policy & Useful/hr & Succ./hr & Failed Cost & Zombie & P95 Lat. & Util. & Attempts \\\\",
+        "\\midrule",
+    ]
+    for row in rows:
+        lines.append(
+            f"{_escape_latex(row.policy)} & {row.useful_per_hour:.1f} & "
+            f"{row.success_per_hour:.1f} & {row.failed_cost_units:.1f} & "
+            f"{row.zombie_rate:.3f} & {row.p95_latency_units:.1f} & "
+            f"{row.utilization:.3f} & {row.attempts} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)

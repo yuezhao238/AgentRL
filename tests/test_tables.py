@@ -4,9 +4,11 @@ from agentrl_infra.tables import (
     LifecycleTableRow,
     MiniWoBContractTableRow,
     TableRow,
+    ThroughputTableRow,
     render_lifecycle_latex,
     render_miniwob_contract_latex,
     render_summary_latex,
+    render_throughput_latex,
     write_summary_csv,
 )
 
@@ -80,3 +82,27 @@ def test_render_miniwob_contract_latex() -> None:
 
     assert "stale\\_dom" in latex
     assert "No Prog." in latex
+
+
+def test_render_throughput_latex() -> None:
+    latex = render_throughput_latex(
+        [
+            ThroughputTableRow(
+                policy="failure_aware",
+                episodes=240,
+                attempts=240,
+                successes=100,
+                useful=200,
+                makespan_units=100.0,
+                useful_per_hour=7200.0,
+                success_per_hour=3600.0,
+                failed_cost_units=100.0,
+                zombie_rate=0.0,
+                p95_latency_units=4.0,
+                utilization=0.7,
+            )
+        ]
+    )
+
+    assert "failure\\_aware" in latex
+    assert "Useful/hr" in latex

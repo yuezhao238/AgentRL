@@ -342,6 +342,35 @@ deterministic reset/restore/step units.}
 \label{tab:lifecycle-results}
 \end{table}
 
+\subsection{Worker-Pool Throughput Results}
+
+Table~\ref{tab:throughput-results} reports a deterministic worker-pool
+simulation with 240 rollout requests across five workload classes and eight
+workers. The workload mixes short successful browser tasks, stale-DOM invalid
+actions, wait-loop timeouts, retryable tool timeouts, and contaminated
+environments. FIFO treats failed sessions as ordinary long-running work.
+Retry-only adds attempts for retryable failures but does not reduce wasted
+runtime cost. The failure-aware policy uses typed failure semantics to terminate
+known-bad rollouts early and treat replayable failures as useful debugging or
+training artifacts.
+
+In this setting, failure-aware scheduling increases useful trajectories/hour
+from 1750.5 to 8037.2, reduces failed rollout cost from 1289.0 to 307.0
+deterministic units, eliminates zombie sessions, and reduces P95 latency from
+36.0 to 6.0 units. The successful trajectory rate also improves because workers
+stop being occupied by late-detected failures.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\input{tables/throughput_summary.tex}
+}
+\caption{Deterministic worker-pool throughput simulation. Useful trajectories
+include successful rollouts and replayable typed failures.}
+\label{tab:throughput-results}
+\end{table}
+
 \subsection{MiniWoB Browser Contract Results}
 
 Table~\ref{tab:miniwob-contract-results} reports a deterministic MiniWoB browser

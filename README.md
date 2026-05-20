@@ -119,6 +119,14 @@ The contract harness fixes the browser action schema, DOM hash observation forma
 stale-DOM checks, no-progress watchdog behavior, and contamination/health checks before
 binding the same interface to a live MiniWoB++ browser environment.
 
+Run the deterministic worker-pool throughput benchmark:
+
+```bash
+uv run agentrl-infra run-throughput-bench --policy fifo --workers 8
+uv run agentrl-infra run-throughput-bench --policy retry_only --workers 8
+uv run agentrl-infra run-throughput-bench --policy failure_aware --workers 8
+```
+
 Run the local experiment suite and generate paper-ready CSV/LaTeX tables:
 
 ```bash
