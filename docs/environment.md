@@ -72,3 +72,10 @@ For deterministic replay:
 ```bash
 uv run agentrl-infra replay-trace runs/failurebench/<run_id>/traces/<sample>.jsonl --execute
 ```
+
+For full-run artifact checks:
+
+```bash
+uv run agentrl-infra validate-run runs/failurebench/<run_id>
+uv run agentrl-infra replay-run runs/failurebench/<run_id>
+```

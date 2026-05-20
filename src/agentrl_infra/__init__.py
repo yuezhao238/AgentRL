@@ -5,7 +5,13 @@ from .failures import FailureRecord, FailureSemantics, FailureType
 from .metrics import EpisodeMetrics, RunSummary
 from .orchestrator import BatchOrchestrator, SchedulerRunSummary
 from .replay import ReplayEngine, ReplayExecutionReport, ReplayMode, ReplayReport
-from .resources import EnvironmentLease, HealthCheckResult, InMemoryEnvironmentPool, ResourceState
+from .resources import (
+    EnvironmentLease,
+    HealthCheckResult,
+    InMemoryEnvironmentPool,
+    ResourceState,
+    ToolResult,
+)
 from .runner import EpisodeResult, EpisodeRunner, StepResult
 from .scheduler import RolloutRequest, SchedulerDecision, TaskStats
 from .session import SessionRuntime, SessionRuntimeConfig, SessionState
@@ -37,5 +43,6 @@ __all__ = [
     "SessionState",
     "StepResult",
     "TaskStats",
+    "ToolResult",
     "RunSummary",
 ]

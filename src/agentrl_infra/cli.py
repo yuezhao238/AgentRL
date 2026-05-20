@@ -6,11 +6,19 @@ from pathlib import Path
 
 import typer
 
+from .artifacts import (
+    replay_run_artifacts,
+    save_artifact_report,
+    save_batch_replay_report,
+    validate_run_artifacts,
+)
 from .benchmarks.failurebench import (
     rerun_failurebench_log,
     run_failurebench,
     run_failurebench_scheduled,
 )
+from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .compare import compare_metric_files
 from .events import EventLog
 from .metrics import load_metrics, save_metrics, summarize_metrics
 from .replay import ReplayEngine, ReplayMode, ReplayReport, validate_event_log
@@ -26,6 +34,13 @@ SCHEDULER_POLICY_OPTION = typer.Option(
     "failure_aware",
     help="Scheduler policy: failure_aware, fifo, or none.",
 )
+LIFECYCLE_OUTPUT_DIR_OPTION = typer.Option(
+    Path("runs/lifecycle"),
+    help="Directory for run outputs.",
+)
+LIFECYCLE_POLICY_OPTION = typer.Option(ReusePolicy.CONTAMINATION_AWARE, help="Reuse policy.")
+LIFECYCLE_EPISODES_OPTION = typer.Option(100, help="Number of synthetic episodes.")
+LIFECYCLE_TTL_OPTION = typer.Option(5, help="TTL for fixed_ttl reuse.")
 
 
 @app.command()
@@ -115,3 +130,70 @@ def summarize_runs(metrics_path: Path) -> None:
     metrics = load_metrics(metrics_path)
     summary = summarize_metrics(metrics)
     typer.echo(summary.model_dump_json(indent=2))
+
+
+@app.command("validate-run")
+def validate_run(run_dir: Path) -> None:
+    """Validate run artifact completeness and trace structure."""
+    report = validate_run_artifacts(run_dir)
+    save_artifact_report(run_dir, report)
+    typer.echo(report.model_dump_json(indent=2))
+    if not report.valid:
+        raise typer.Exit(code=1)
+
+
+@app.command("replay-run")
+def replay_run(
+    run_dir: Path,
+    benchmark: str = typer.Option("failurebench", help="Replay adapter."),
+    replay_mode: ReplayMode = ReplayMode.EXACT,
+    verbose: bool = typer.Option(False, help="Print per-trace replay details."),
+) -> None:
+    """Execute deterministic replay over all supported traces in a run directory."""
+    report = replay_run_artifacts(run_dir, benchmark=benchmark, mode=replay_mode)
+    save_batch_replay_report(run_dir, report)
+    if verbose:
+        typer.echo(report.model_dump_json(indent=2))
+    else:
+        typer.echo(
+            json.dumps(
+                {
+                    "run_dir": report.run_dir,
+                    "attempted": report.attempted,
+                    "replayable": report.replayable,
+                    "matched": report.matched,
+                    "mismatched": report.mismatched,
+                    "skipped": report.skipped,
+                },
+                indent=2,
+            )
+        )
+    if report.mismatched:
+        raise typer.Exit(code=1)
+
+
+@app.command("run-lifecycle-bench")
+def run_lifecycle_bench(
+    output_dir: Path = LIFECYCLE_OUTPUT_DIR_OPTION,
+    run_id: str | None = RUN_ID_OPTION,
+    policy: ReusePolicy = LIFECYCLE_POLICY_OPTION,
+    episodes: int = LIFECYCLE_EPISODES_OPTION,
+    ttl: int = LIFECYCLE_TTL_OPTION,
+) -> None:
+    """Run synthetic environment lifecycle/reuse benchmark."""
+    run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    _, summary = run_lifecycle_benchmark(
+        policy=policy,
+        episodes=episodes,
+        ttl=ttl,
+        output_dir=output_dir,
+        run_id=run_id,
+    )
+    typer.echo(summary.model_dump_json(indent=2))
+
+
+@app.command("compare-runs")
+def compare_runs(baseline_metrics: Path, candidate_metrics: Path) -> None:
+    """Compare two metrics.json files."""
+    comparison = compare_metric_files(baseline_metrics, candidate_metrics)
+    typer.echo(comparison.model_dump_json(indent=2))

@@ -87,6 +87,27 @@ Execute deterministic replay for FailureBench:
 uv run agentrl-infra replay-trace runs/failurebench/<run_id>/traces/<sample>.jsonl --execute
 ```
 
+Validate and replay a full run:
+
+```bash
+uv run agentrl-infra validate-run runs/failurebench/<run_id>
+uv run agentrl-infra replay-run runs/failurebench/<run_id>
+```
+
+Compare two runs:
+
+```bash
+uv run agentrl-infra compare-runs runs/failurebench/a/metrics.json runs/failurebench/b/metrics.json
+```
+
+Run the synthetic environment lifecycle benchmark:
+
+```bash
+uv run agentrl-infra run-lifecycle-bench --policy recreate
+uv run agentrl-infra run-lifecycle-bench --policy blind_reuse
+uv run agentrl-infra run-lifecycle-bench --policy contamination_aware
+```
+
 ## Project Status
 
 This is an early research codebase. APIs are intentionally small and explicit so that
