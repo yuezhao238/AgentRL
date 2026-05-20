@@ -76,6 +76,13 @@ agent RL rollouts.
   - [x] contamination check
   - [x] deterministic trace emission
   - [x] CLI：`agentrl-infra run-miniwob-contract`
+- [x] MiniWoB++ contract quantitative suite：
+  - [x] 20 tasks x 5 dev seeds = 100 episodes per policy
+  - [x] oracle：100/100 success
+  - [x] stale DOM：0/100 success, 100 invalid-action failures
+  - [x] invalid selector：0/100 success, 100 invalid-action failures
+  - [x] wait loop：0/100 success, 100 no-progress failures
+  - [x] repeated wrong text：60/100 success, 40 no-progress failures
 
 ## 1. MLSys 主线
 
@@ -104,6 +111,7 @@ agent RL rollouts.
 页面等待、环境污染和 replay mismatch。
 
 - [x] MiniWoB++ deterministic contract harness
+- [x] MiniWoB++ contract result table in `paper/tables/miniwob_contract_summary.tex`
 - [ ] Live MiniWoB++ browser binding:
   - [ ] install/lock browser dependency
   - [ ] launch task by name/seed
@@ -312,4 +320,3 @@ agent RL rollouts.
 - [ ] 需要训练曲线或至少 rollout-data-quality 对训练输入的量化影响。
 - [ ] 需要更强的 related work 和 architecture figure。
 - [ ] 需要把所有实验配置、依赖和 artifact validation 做到一键复现。
-

@@ -75,6 +75,7 @@ class MiniWoBEpisodeMetrics(BaseModel):
 
 
 class MiniWoBRunSummary(BaseModel):
+    policy: str
     episode_count: int
     success_count: int
     failure_count: int
@@ -186,6 +187,14 @@ class MiniWoBContractEnvironment:
         assert parsed is not None
 
         current = self._observation()
+        if parsed.action_type == BrowserActionType.WAIT:
+            return StepResult(
+                observation=current.to_runner_observation(),
+                reward=0.0,
+                done=False,
+                info={"progress_key": current.progress_key, "reason": "wait"},
+            )
+
         if parsed.observed_dom_hash and parsed.observed_dom_hash != current.dom_hash:
             return StepResult(
                 observation=current.to_runner_observation(),
@@ -333,6 +342,28 @@ class MiniWoBRepeatedActionPolicy:
         }
 
 
+class MiniWoBStaleDomPolicy:
+    def next_action(self, observation: dict[str, Any], log: EventLog) -> dict[str, Any]:
+        action = dict(observation["action_hint"])
+        action["observed_dom_hash"] = "stale-dom-hash"
+        return action
+
+
+class MiniWoBInvalidSelectorPolicy:
+    def next_action(self, observation: dict[str, Any], log: EventLog) -> dict[str, Any]:
+        action = dict(observation["action_hint"])
+        action["selector"] = "#distractor"
+        return action
+
+
+class MiniWoBWaitLoopPolicy:
+    def next_action(self, observation: dict[str, Any], log: EventLog) -> dict[str, Any]:
+        return {
+            "action_type": BrowserActionType.WAIT.value,
+            "observed_dom_hash": observation["dom_hash"],
+        }
+
+
 def run_miniwob_contract_subset(
     *,
     output_dir: Path,
@@ -375,17 +406,22 @@ def run_miniwob_contract_subset(
             result.event_log.save_jsonl(trace_path)
             metrics.append(_metrics_from_result(result, task_name, seed, trace_path))
 
-    summary = summarize_miniwob_metrics(metrics)
+    summary = summarize_miniwob_metrics(metrics, policy_name=policy_name)
     _write_miniwob_run(run_dir, selected_tasks, selected_seeds, policy_name, metrics, summary)
     return metrics, summary
 
 
-def summarize_miniwob_metrics(metrics: list[MiniWoBEpisodeMetrics]) -> MiniWoBRunSummary:
+def summarize_miniwob_metrics(
+    metrics: list[MiniWoBEpisodeMetrics],
+    *,
+    policy_name: str = "unknown",
+) -> MiniWoBRunSummary:
     by_failure: dict[str, int] = {}
     for metric in metrics:
         if metric.failure_type:
             by_failure[metric.failure_type.value] = by_failure.get(metric.failure_type.value, 0) + 1
     return MiniWoBRunSummary(
+        policy=policy_name,
         episode_count=len(metrics),
         success_count=sum(1 for metric in metrics if metric.success),
         failure_count=sum(1 for metric in metrics if not metric.success),
@@ -397,11 +433,25 @@ def summarize_miniwob_metrics(metrics: list[MiniWoBEpisodeMetrics]) -> MiniWoBRu
     )
 
 
-def _policy_from_name(policy_name: str) -> MiniWoBOraclePolicy | MiniWoBRepeatedActionPolicy:
+def _policy_from_name(
+    policy_name: str,
+) -> (
+    MiniWoBOraclePolicy
+    | MiniWoBRepeatedActionPolicy
+    | MiniWoBStaleDomPolicy
+    | MiniWoBInvalidSelectorPolicy
+    | MiniWoBWaitLoopPolicy
+):
     if policy_name == "oracle":
         return MiniWoBOraclePolicy()
     if policy_name == "repeated_action":
         return MiniWoBRepeatedActionPolicy()
+    if policy_name == "stale_dom":
+        return MiniWoBStaleDomPolicy()
+    if policy_name == "invalid_selector":
+        return MiniWoBInvalidSelectorPolicy()
+    if policy_name == "wait_loop":
+        return MiniWoBWaitLoopPolicy()
     raise ValueError(f"unknown MiniWoB policy: {policy_name}")
 
 

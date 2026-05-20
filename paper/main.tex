@@ -342,6 +342,30 @@ deterministic reset/restore/step units.}
 \label{tab:lifecycle-results}
 \end{table}
 
+\subsection{MiniWoB Browser Contract Results}
+
+Table~\ref{tab:miniwob-contract-results} reports a deterministic MiniWoB browser
+contract run over the fixed 20-task subset and five development seeds per task.
+This is not yet the live browser experiment; it fixes the runtime contract that
+the live adapter must satisfy: actions carry a DOM hash, selectors are validated
+against actionable elements, wait loops produce no-progress failures, and every
+episode emits a replayable event trace. The oracle policy solves all 100
+episodes. Stale-DOM and invalid-selector policies fail immediately with typed
+policy-attributable invalid-action records. The wait-loop policy fails all 100
+episodes through the runtime no-progress watchdog after two turns.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\input{tables/miniwob_contract_summary.tex}
+}
+\caption{MiniWoB browser contract results on 20 tasks $\times$ 5 seeds. The
+contract harness quantifies browser-runtime failure handling before attaching
+the same adapter interface to live MiniWoB++ pages.}
+\label{tab:miniwob-contract-results}
+\end{table}
+
 \begin{table}[t]
 \centering
 \resizebox{\linewidth}{!}{%

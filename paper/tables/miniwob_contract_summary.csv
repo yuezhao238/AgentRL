@@ -1,0 +1,6 @@
+policy,episodes,successes,failures,success_rate,replayable_rate,mean_turn_count,agent_invalid_action,repetitive_loop,no_progress,environment_contamination
+oracle,100,100,0,1.0,1.0,1.0,0,0,0,0
+stale_dom,100,0,100,0.0,1.0,1.0,100,0,0,0
+invalid_selector,100,0,100,0.0,1.0,1.0,100,0,0,0
+wait_loop,100,0,100,0.0,1.0,2.0,0,0,100,0
+repeated_action,100,60,40,0.6,1.0,1.4,0,0,40,0

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from agentrl_infra.tables import (
     LifecycleTableRow,
+    MiniWoBContractTableRow,
     TableRow,
     render_lifecycle_latex,
+    render_miniwob_contract_latex,
     render_summary_latex,
     write_summary_csv,
 )
@@ -58,3 +60,23 @@ def test_render_lifecycle_latex() -> None:
 
     assert "blind\\_reuse" in latex
     assert "Contam. Fail" in latex
+
+
+def test_render_miniwob_contract_latex() -> None:
+    latex = render_miniwob_contract_latex(
+        [
+            MiniWoBContractTableRow(
+                policy="stale_dom",
+                episodes=10,
+                successes=0,
+                failures=10,
+                success_rate=0.0,
+                replayable_rate=1.0,
+                mean_turn_count=1.0,
+                agent_invalid_action=10,
+            )
+        ]
+    )
+
+    assert "stale\\_dom" in latex
+    assert "No Prog." in latex

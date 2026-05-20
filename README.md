@@ -127,7 +127,7 @@ uv run agentrl-infra run-experiment-suite --config-path experiments/configs/loca
 ```
 
 This runs FailureBench baselines, the RolloutOS configuration, lifecycle policies,
-artifact validation, batch replay, and writes tables under
+MiniWoB browser contract policies, artifact validation, batch replay, and writes tables under
 `runs/experiments/<suite_id>/tables/`.
 
 ## Project Status

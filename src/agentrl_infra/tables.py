@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .benchmarks.lifecycle import LifecycleSummary
+from .integrations.miniwob import MiniWoBRunSummary
 from .metrics import RunSummary, load_metrics, summarize_metrics
 
 
@@ -33,6 +34,20 @@ class LifecycleTableRow(BaseModel):
     contamination_failures: int
     total_cost_units: float
     cost_per_success: float
+
+
+class MiniWoBContractTableRow(BaseModel):
+    policy: str
+    episodes: int
+    successes: int
+    failures: int
+    success_rate: float
+    replayable_rate: float
+    mean_turn_count: float
+    agent_invalid_action: int = 0
+    repetitive_loop: int = 0
+    no_progress: int = 0
+    environment_contamination: int = 0
 
 
 def build_summary_rows(inputs: dict[str, Path]) -> list[TableRow]:
@@ -108,6 +123,47 @@ def write_lifecycle_latex(rows: list[LifecycleTableRow], path: Path) -> None:
     path.write_text(render_lifecycle_latex(rows), encoding="utf-8")
 
 
+def build_miniwob_contract_rows(inputs: dict[str, Path]) -> list[MiniWoBContractTableRow]:
+    rows: list[MiniWoBContractTableRow] = []
+    for name, summary_path in inputs.items():
+        summary = MiniWoBRunSummary.model_validate(
+            json.loads(summary_path.read_text(encoding="utf-8"))
+        )
+        episodes = summary.episode_count
+        rows.append(
+            MiniWoBContractTableRow(
+                policy=name,
+                episodes=episodes,
+                successes=summary.success_count,
+                failures=summary.failure_count,
+                success_rate=summary.success_count / episodes if episodes else 0.0,
+                replayable_rate=summary.replayable_count / episodes if episodes else 0.0,
+                mean_turn_count=summary.mean_turn_count,
+                agent_invalid_action=summary.by_failure_type.get("agent_invalid_action", 0),
+                repetitive_loop=summary.by_failure_type.get("repetitive_loop", 0),
+                no_progress=summary.by_failure_type.get("no_progress", 0),
+                environment_contamination=summary.by_failure_type.get(
+                    "environment_contamination", 0
+                ),
+            )
+        )
+    return rows
+
+
+def write_miniwob_contract_csv(rows: list[MiniWoBContractTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(MiniWoBContractTableRow.model_fields))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.model_dump())
+
+
+def write_miniwob_contract_latex(rows: list[MiniWoBContractTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_miniwob_contract_latex(rows), encoding="utf-8")
+
+
 def render_summary_latex(rows: list[TableRow]) -> str:
     lines = [
         "\\begin{tabular}{lrrrrrrr}",
@@ -141,6 +197,24 @@ def render_lifecycle_latex(rows: list[LifecycleTableRow]) -> str:
             f"{_escape_latex(row.policy)} & {row.successes}/{row.episodes} & "
             f"{row.resets} & {row.restores} & {row.reuses} & "
             f"{row.contamination_failures} & {row.cost_per_success:.3f} \\\\"
+        )
+    lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    return "\n".join(lines)
+
+
+def render_miniwob_contract_latex(rows: list[MiniWoBContractTableRow]) -> str:
+    lines = [
+        "\\begin{tabular}{lrrrrrrr}",
+        "\\toprule",
+        "Policy & Success & Succ. Rate & Replayable & Turns & Invalid & Loop & No Prog. \\\\",
+        "\\midrule",
+    ]
+    for row in rows:
+        lines.append(
+            f"{_escape_latex(row.policy)} & {row.successes}/{row.episodes} & "
+            f"{row.success_rate:.3f} & {row.replayable_rate:.3f} & "
+            f"{row.mean_turn_count:.2f} & {row.agent_invalid_action} & "
+            f"{row.repetitive_loop} & {row.no_progress} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)

@@ -52,6 +52,20 @@ def test_miniwob_contract_detects_stale_dom() -> None:
     assert step.failure.type == FailureType.AGENT_INVALID_ACTION
 
 
+def test_miniwob_contract_stale_dom_policy_fails_with_invalid_action(tmp_path) -> None:
+    _, summary = run_miniwob_contract_subset(
+        output_dir=tmp_path,
+        run_id="stale",
+        task_names=["click-button", "enter-text"],
+        seeds=[1000],
+        policy_name="stale_dom",
+    )
+
+    assert summary.policy == "stale_dom"
+    assert summary.success_count == 0
+    assert summary.by_failure_type[FailureType.AGENT_INVALID_ACTION.value] == 2
+
+
 def test_run_miniwob_contract_subset_writes_traces(tmp_path) -> None:
     _, summary = run_miniwob_contract_subset(
         output_dir=tmp_path,
@@ -77,3 +91,16 @@ def test_run_miniwob_contract_repeated_action_exercises_no_progress_detector(tmp
 
     assert summary.success_count == 0
     assert summary.by_failure_type[FailureType.NO_PROGRESS.value] == 1
+
+
+def test_run_miniwob_contract_wait_loop_exercises_no_progress_detector(tmp_path) -> None:
+    _, summary = run_miniwob_contract_subset(
+        output_dir=tmp_path,
+        run_id="wait-loop",
+        task_names=["click-button", "enter-text"],
+        seeds=[1000],
+        policy_name="wait_loop",
+    )
+
+    assert summary.success_count == 0
+    assert summary.by_failure_type[FailureType.NO_PROGRESS.value] == 2

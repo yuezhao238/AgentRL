@@ -18,6 +18,8 @@ def test_run_experiment_suite_smoke(tmp_path) -> None:
             dev_seeds_per_type=1,
             test_seeds_per_type=0,
             lifecycle_episodes=5,
+            miniwob_tasks=["click-button", "enter-text"],
+            miniwob_seeds=[1000],
         )
     )
 
@@ -25,7 +27,10 @@ def test_run_experiment_suite_smoke(tmp_path) -> None:
     assert (suite_dir / "suite_report.json").exists()
     assert (suite_dir / "tables" / "failurebench_summary.csv").exists()
     assert (suite_dir / "tables" / "failurebench_summary.tex").exists()
+    assert (suite_dir / "tables" / "miniwob_contract_summary.csv").exists()
+    assert (suite_dir / "tables" / "miniwob_contract_summary.tex").exists()
     assert "rolloutos" in report.failurebench_runs
+    assert "oracle" in report.miniwob_runs
 
 
 def test_load_experiment_suite_config(tmp_path) -> None:
@@ -39,6 +44,8 @@ def test_load_experiment_suite_config(tmp_path) -> None:
                 "dev_seeds_per_type": 1,
                 "test_seeds_per_type": 0,
                 "lifecycle_episodes": 5,
+                "miniwob_tasks": ["click-button"],
+                "miniwob_seeds": [1000, 1001],
             }
         ),
         encoding="utf-8",
@@ -48,3 +55,5 @@ def test_load_experiment_suite_config(tmp_path) -> None:
 
     assert config.suite_id == "cfg"
     assert config.dev_seeds_per_type == 1
+    assert config.miniwob_tasks == ["click-button"]
+    assert config.miniwob_seeds == [1000, 1001]

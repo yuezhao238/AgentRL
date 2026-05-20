@@ -14,12 +14,16 @@ from .artifacts import (
 from .baselines import RuntimeBaseline, evaluate_failurebench_baseline
 from .benchmarks.failurebench import run_failurebench_scheduled
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .integrations.miniwob import MINIWOB_20_TASKS, run_miniwob_contract_subset
 from .metrics import save_metrics
 from .tables import (
     build_lifecycle_rows,
+    build_miniwob_contract_rows,
     build_summary_rows,
     write_lifecycle_csv,
     write_lifecycle_latex,
+    write_miniwob_contract_csv,
+    write_miniwob_contract_latex,
     write_summary_csv,
     write_summary_latex,
 )
@@ -32,12 +36,24 @@ class ExperimentSuiteConfig(BaseModel):
     dev_seeds_per_type: int = 5
     test_seeds_per_type: int = 0
     lifecycle_episodes: int = 50
+    miniwob_tasks: list[str] = Field(default_factory=lambda: list(MINIWOB_20_TASKS))
+    miniwob_seeds: list[int] = Field(default_factory=lambda: [1000, 1001, 1002, 1003, 1004])
+    miniwob_policies: list[str] = Field(
+        default_factory=lambda: [
+            "oracle",
+            "stale_dom",
+            "invalid_selector",
+            "wait_loop",
+            "repeated_action",
+        ]
+    )
 
 
 class ExperimentSuiteReport(BaseModel):
     suite_dir: str
     failurebench_runs: dict[str, str] = Field(default_factory=dict)
     lifecycle_runs: dict[str, str] = Field(default_factory=dict)
+    miniwob_runs: dict[str, str] = Field(default_factory=dict)
     tables: dict[str, str] = Field(default_factory=dict)
 
 
@@ -110,6 +126,18 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
         )
         lifecycle_runs[policy.value] = str(lifecycle_dir / run_id / "lifecycle_summary.json")
 
+    miniwob_dir = suite_dir / "miniwob_contract"
+    miniwob_runs: dict[str, str] = {}
+    for policy_name in config.miniwob_policies:
+        run_miniwob_contract_subset(
+            output_dir=miniwob_dir,
+            run_id=policy_name,
+            task_names=config.miniwob_tasks,
+            seeds=config.miniwob_seeds,
+            policy_name=policy_name,
+        )
+        miniwob_runs[policy_name] = str(miniwob_dir / policy_name / "summary.json")
+
     rows = build_summary_rows({name: Path(path) for name, path in failurebench_runs.items()})
     table_dir = suite_dir / "tables"
     csv_path = table_dir / "failurebench_summary.csv"
@@ -125,15 +153,26 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     write_lifecycle_csv(lifecycle_rows, lifecycle_csv_path)
     write_lifecycle_latex(lifecycle_rows, lifecycle_tex_path)
 
+    miniwob_rows = build_miniwob_contract_rows(
+        {name: Path(path) for name, path in miniwob_runs.items()}
+    )
+    miniwob_csv_path = table_dir / "miniwob_contract_summary.csv"
+    miniwob_tex_path = table_dir / "miniwob_contract_summary.tex"
+    write_miniwob_contract_csv(miniwob_rows, miniwob_csv_path)
+    write_miniwob_contract_latex(miniwob_rows, miniwob_tex_path)
+
     report = ExperimentSuiteReport(
         suite_dir=str(suite_dir),
         failurebench_runs=failurebench_runs,
         lifecycle_runs=lifecycle_runs,
+        miniwob_runs=miniwob_runs,
         tables={
             "failurebench_summary_csv": str(csv_path),
             "failurebench_summary_tex": str(tex_path),
             "lifecycle_summary_csv": str(lifecycle_csv_path),
             "lifecycle_summary_tex": str(lifecycle_tex_path),
+            "miniwob_contract_summary_csv": str(miniwob_csv_path),
+            "miniwob_contract_summary_tex": str(miniwob_tex_path),
         },
     )
     (suite_dir / "suite_report.json").write_text(

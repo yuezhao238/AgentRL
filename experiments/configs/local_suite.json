@@ -4,5 +4,35 @@
   "split": "dev",
   "dev_seeds_per_type": 5,
   "test_seeds_per_type": 0,
-  "lifecycle_episodes": 50
+  "lifecycle_episodes": 50,
+  "miniwob_tasks": [
+    "click-button",
+    "click-checkboxes",
+    "click-checkboxes-large",
+    "click-collapsible",
+    "click-dialog",
+    "click-link",
+    "click-menu",
+    "click-option",
+    "click-pie",
+    "enter-date",
+    "enter-password",
+    "enter-text",
+    "focus-text",
+    "login-user",
+    "multi-layouts",
+    "navigate-tree",
+    "search-engine",
+    "social-media",
+    "use-autocomplete",
+    "use-spinner"
+  ],
+  "miniwob_seeds": [1000, 1001, 1002, 1003, 1004],
+  "miniwob_policies": [
+    "oracle",
+    "stale_dom",
+    "invalid_selector",
+    "wait_loop",
+    "repeated_action"
+  ]
 }
