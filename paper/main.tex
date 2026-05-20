@@ -425,6 +425,17 @@ rollout workers must control chat-template, decoding constraints, and token
 budget per action channel, not simply call a model endpoint and hope for a valid
 tool call.
 
+We also feed the measured action-channel summaries into the worker-pool
+simulator, so the scheduling workload reflects real Qwen3-4B parse/success
+rates and measured per-action latency rather than only hand-written synthetic
+classes. Table~\ref{tab:model-action-throughput-results} reports the resulting
+system consequence. On this empirical action-channel workload, retry-only
+increases attempts from 200 to 245, raises failed cost, and reduces useful
+throughput. Failure-aware execution does not claim additional task successes;
+it converts typed invalid-action failures into replayable useful artifacts,
+raising useful trajectories/hour from 4646.8 to 5995.8 while preserving the
+same successful trajectory rate.
+
 \begin{table}[t]
 \centering
 \scriptsize
@@ -434,6 +445,17 @@ tool call.
 \caption{Qwen3-4B as a browser-action policy on MiniWoB contract tasks under
 two token budgets and two action-channel protocols.}
 \label{tab:model-action-results}
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\input{tables/model_action_throughput_summary.tex}
+}
+\caption{Worker-pool throughput simulation parameterized by the measured
+Qwen3-4B model-to-action summaries in Table~\ref{tab:model-action-results}.}
+\label{tab:model-action-throughput-results}
 \end{table}
 
 \subsection{Worker-Pool Throughput Results}

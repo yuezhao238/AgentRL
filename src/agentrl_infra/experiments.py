@@ -17,7 +17,11 @@ from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
 from .benchmarks.model_action import run_model_action_benchmark
 from .benchmarks.model_generation import run_model_generation_smoke
 from .benchmarks.model_provenance import DEFAULT_MODEL_IDS, run_model_provenance_audit
-from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
+from .benchmarks.throughput import (
+    ThroughputPolicy,
+    build_model_action_throughput_workload,
+    run_throughput_benchmark,
+)
 from .integrations.miniwob import MINIWOB_20_TASKS, run_miniwob_contract_subset
 from .metrics import save_metrics
 from .tables import (
@@ -76,6 +80,8 @@ class ExperimentSuiteConfig(BaseModel):
     model_action_max_new_tokens: int = 96
     model_action_token_budgets: list[int] = Field(default_factory=list)
     model_action_protocol_budgets: dict[str, list[int]] = Field(default_factory=dict)
+    throughput_from_model_action: bool = True
+    throughput_model_action_episodes_per_cell: int = 40
 
 
 class ExperimentSuiteReport(BaseModel):
@@ -243,6 +249,24 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
             + "\n",
             encoding="utf-8",
         )
+        if config.throughput_from_model_action:
+            empirical_workload = build_model_action_throughput_workload(
+                model_action_summary_path,
+                episodes_per_cell=config.throughput_model_action_episodes_per_cell,
+            )
+            empirical_throughput_dir = suite_dir / "throughput_model_action"
+            for policy in ThroughputPolicy:
+                run_id = f"model_action_{policy.value}"
+                run_throughput_benchmark(
+                    policy=policy,
+                    worker_count=config.throughput_workers,
+                    output_dir=empirical_throughput_dir,
+                    run_id=run_id,
+                    workload=empirical_workload,
+                )
+                throughput_runs[run_id] = str(
+                    empirical_throughput_dir / run_id / "throughput_summary.json"
+                )
 
     rows = build_summary_rows({name: Path(path) for name, path in failurebench_runs.items()})
     table_dir = suite_dir / "tables"

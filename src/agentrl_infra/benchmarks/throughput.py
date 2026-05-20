@@ -6,8 +6,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
+from statistics import mean
 
 from pydantic import BaseModel, Field
+
+from .model_action import ModelActionSummary
 
 
 class ThroughputPolicy(StrEnum):
@@ -81,6 +84,54 @@ class ThroughputRun(BaseModel):
     policy: ThroughputPolicy
     metrics: list[ThroughputEpisodeMetrics] = Field(default_factory=list)
     summary: ThroughputSummary
+
+
+def build_model_action_throughput_workload(
+    summary_path: Path,
+    *,
+    episodes_per_cell: int = 40,
+    min_service_time_units: float = 0.05,
+) -> list[WorkloadClass]:
+    """Build scheduler workload classes from real model-to-action benchmark summaries."""
+    summaries = [
+        ModelActionSummary.model_validate(item)
+        for item in json.loads(summary_path.read_text(encoding="utf-8"))
+    ]
+    workload: list[WorkloadClass] = []
+    for summary in summaries:
+        episodes = summary.episode_count
+        if episodes == 0:
+            continue
+        failures = episodes - summary.success_count
+        failure_probability = failures / episodes
+        replayable_failures = summary.invalid_action_count + summary.no_progress_count
+        replayable_failure_probability = replayable_failures / failures if failures else 0.0
+        failed_records = [record for record in summary.records if not record.success]
+        failure_latency = (
+            mean(record.latency_seconds for record in failed_records)
+            if failed_records
+            else summary.total_latency_seconds / episodes
+        )
+        service_time = max(summary.total_latency_seconds / episodes, min_service_time_units)
+        detection_time = max(min(failure_latency, service_time), min_service_time_units)
+        zombie_probability = min(0.50, 0.05 + (summary.no_progress_count / episodes) * 0.75)
+        workload.append(
+            WorkloadClass(
+                name=(
+                    f"model_action_{_short_model_id(summary.model_id)}_"
+                    f"{summary.prompt_protocol}_{summary.max_new_tokens}"
+                ),
+                count=episodes_per_cell,
+                service_time_units=service_time,
+                failure_probability=failure_probability,
+                replayable_failure_probability=replayable_failure_probability,
+                zombie_probability=zombie_probability if failures else 0.0,
+                detection_time_units=detection_time,
+                retryable=failures > 0,
+                priority=1.0,
+            )
+        )
+    return workload
 
 
 def default_throughput_workload() -> list[WorkloadClass]:
@@ -326,3 +377,7 @@ def _percentile(sorted_values: list[float], quantile: float) -> float:
 
 def _unique_count(values: Iterable[str]) -> int:
     return len(set(values))
+
+
+def _short_model_id(value: str) -> str:
+    return value.split("/")[-1].replace("-", "_").replace(".", "_")

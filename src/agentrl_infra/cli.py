@@ -29,7 +29,11 @@ from .benchmarks.model_generation import (
     run_model_generation_smoke,
 )
 from .benchmarks.model_provenance import DEFAULT_MODEL_IDS, run_model_provenance_audit
-from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
+from .benchmarks.throughput import (
+    ThroughputPolicy,
+    build_model_action_throughput_workload,
+    run_throughput_benchmark,
+)
 from .compare import compare_metric_files
 from .events import EventLog
 from .experiments import ExperimentSuiteConfig, load_experiment_suite_config, run_experiment_suite
@@ -61,6 +65,14 @@ THROUGHPUT_OUTPUT_DIR_OPTION = typer.Option(
 )
 THROUGHPUT_WORKERS_OPTION = typer.Option(8, help="Number of simulated rollout workers.")
 THROUGHPUT_POLICY_OPTION = typer.Option(ThroughputPolicy.FAILURE_AWARE, help="Policy.")
+THROUGHPUT_MODEL_ACTION_SUMMARY_OPTION = typer.Option(
+    None,
+    help="Optional model_action_summary.json used to derive an empirical workload.",
+)
+THROUGHPUT_EPISODES_PER_CELL_OPTION = typer.Option(
+    40,
+    help="Simulated rollout requests per model/action protocol cell.",
+)
 MODEL_OUTPUT_DIR_OPTION = typer.Option(
     Path("runs/model_provenance"),
     help="Directory for model provenance audit outputs.",
@@ -240,14 +252,25 @@ def run_throughput_bench(
     run_id: str | None = RUN_ID_OPTION,
     policy: ThroughputPolicy = THROUGHPUT_POLICY_OPTION,
     workers: int = THROUGHPUT_WORKERS_OPTION,
+    model_action_summary: Path | None = THROUGHPUT_MODEL_ACTION_SUMMARY_OPTION,
+    episodes_per_cell: int = THROUGHPUT_EPISODES_PER_CELL_OPTION,
 ) -> None:
     """Run deterministic worker-pool throughput simulation."""
     run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    workload = (
+        build_model_action_throughput_workload(
+            model_action_summary,
+            episodes_per_cell=episodes_per_cell,
+        )
+        if model_action_summary
+        else None
+    )
     run = run_throughput_benchmark(
         policy=policy,
         worker_count=workers,
         output_dir=output_dir,
         run_id=run_id,
+        workload=workload,
     )
     typer.echo(run.summary.model_dump_json(indent=2))
 
