@@ -54,7 +54,11 @@
     "search-engine"
   ],
   "model_action_seeds": [1000, 1001, 1002],
-  "model_action_prompt_protocols": ["default", "no_thinking"],
-  "model_action_token_budgets": [96, 384],
+  "model_action_prompt_protocols": ["default", "no_thinking", "guided_json"],
+  "model_action_protocol_budgets": {
+    "default": [96, 384],
+    "no_thinking": [96, 384],
+    "guided_json": [96]
+  },
   "model_action_max_new_tokens": 96
 }

@@ -24,6 +24,7 @@ experiments = [
     "hf-xet>=1.1",
     "httpx>=0.27",
     "huggingface-hub>=0.34,<1.0",
+    "lm-format-enforcer>=0.10",
     "openai>=1.0",
     "protobuf>=5",
     "pyyaml>=6",

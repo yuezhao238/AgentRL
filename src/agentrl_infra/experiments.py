@@ -75,6 +75,7 @@ class ExperimentSuiteConfig(BaseModel):
     model_action_prompt_protocols: list[str] = Field(default_factory=lambda: ["no_thinking"])
     model_action_max_new_tokens: int = 96
     model_action_token_budgets: list[int] = Field(default_factory=list)
+    model_action_protocol_budgets: dict[str, list[int]] = Field(default_factory=dict)
 
 
 class ExperimentSuiteReport(BaseModel):
@@ -209,11 +210,17 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     model_action_summary_path: Path | None = None
     if config.model_action_model_ids:
         model_action_dir = suite_dir / "model_action"
-        token_budgets = config.model_action_token_budgets or [
-            config.model_action_max_new_tokens
-        ]
+        token_budgets = config.model_action_token_budgets or [config.model_action_max_new_tokens]
+        budget_to_protocols: dict[int, list[str]] = {
+            budget: list(config.model_action_prompt_protocols) for budget in token_budgets
+        }
+        if config.model_action_protocol_budgets:
+            budget_to_protocols = {}
+            for protocol, budgets in config.model_action_protocol_budgets.items():
+                for budget in budgets:
+                    budget_to_protocols.setdefault(budget, []).append(protocol)
         combined_summaries = []
-        for max_new_tokens in token_budgets:
+        for max_new_tokens, prompt_protocols in sorted(budget_to_protocols.items()):
             combined_summaries.extend(
                 run_model_action_benchmark(
                     output_dir=model_action_dir,
@@ -221,7 +228,7 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
                     model_ids=config.model_action_model_ids,
                     task_names=config.model_action_tasks,
                     seeds=config.model_action_seeds,
-                    prompt_protocols=config.model_action_prompt_protocols,
+                    prompt_protocols=prompt_protocols,
                     max_new_tokens=max_new_tokens,
                 )
             )

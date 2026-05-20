@@ -32,6 +32,9 @@ For the full experiment/runtime environment on the current A100 machine:
 uv sync --extra dev --extra experiments --extra sglang
 ```
 
+The `experiments` extra includes local Transformers generation and LM Format
+Enforcer for JSON-schema constrained action decoding.
+
 Switch to the backup vLLM backend with:
 
 ```bash

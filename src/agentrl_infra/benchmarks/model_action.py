@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
@@ -20,7 +21,7 @@ from .model_provenance import encode_prompt, tokenizer_fingerprint
 
 DEFAULT_ACTION_TASKS = ["click-button", "enter-text", "search-engine"]
 DEFAULT_ACTION_SEEDS = [1000]
-ActionPromptProtocol = Literal["default", "no_thinking"]
+ActionPromptProtocol = Literal["default", "no_thinking", "guided_json"]
 DEFAULT_ACTION_PROMPT_PROTOCOLS: list[ActionPromptProtocol] = ["no_thinking"]
 
 
@@ -162,6 +163,9 @@ def run_model_action_with_loaded_model(
             "model_id": model_id,
             "prompt_protocol": prompt_protocol,
             "max_new_tokens": max_new_tokens,
+            "action_schema_hash": (
+                _action_schema_hash() if prompt_protocol == "guided_json" else None
+            ),
         },
     )
     specs = build_miniwob_task_specs()
@@ -255,6 +259,8 @@ def _run_action_episode(
             "seed": seed,
             "output_text": generated["output_text"],
             "latency_seconds": generated["latency_seconds"],
+            "decoding_backend": generated["decoding_backend"],
+            "action_schema_hash": generated["action_schema_hash"],
         },
     )
     action, parse_failure = parse_browser_action(generated["output_text"])
@@ -338,6 +344,24 @@ def _generate_action_text(
     prompt_token_ids = _encode_action_prompt(tokenizer, prompt, prompt_protocol)
     input_ids = torch.tensor([prompt_token_ids], device=model.device)
     attention_mask = torch.ones_like(input_ids)
+    prefix_allowed_tokens_fn = None
+    decoding_backend = "transformers_greedy"
+    action_schema_hash = None
+    if prompt_protocol == "guided_json":
+        try:
+            from lmformatenforcer import JsonSchemaParser
+            from lmformatenforcer.integrations.transformers import (
+                build_transformers_prefix_allowed_tokens_fn,
+            )
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("lmformatenforcer is required for guided_json actions") from exc
+        schema = browser_action_json_schema()
+        prefix_allowed_tokens_fn = build_transformers_prefix_allowed_tokens_fn(
+            tokenizer,
+            JsonSchemaParser(schema),
+        )
+        decoding_backend = "lmformatenforcer_json_schema"
+        action_schema_hash = _schema_hash(schema)
     started = perf_counter()
     with torch.inference_mode():
         output = model.generate(
@@ -345,6 +369,7 @@ def _generate_action_text(
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
             do_sample=False,
+            prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
             output_scores=True,
             return_dict_in_generate=True,
             pad_token_id=tokenizer.eos_token_id,
@@ -366,6 +391,8 @@ def _generate_action_text(
         "generated_logprobs": generated_logprobs,
         "output_text": tokenizer.decode(generated_token_ids, skip_special_tokens=True),
         "latency_seconds": latency,
+        "decoding_backend": decoding_backend,
+        "action_schema_hash": action_schema_hash,
     }
 
 
@@ -400,7 +427,7 @@ def _encode_action_prompt(
 ) -> list[int]:
     chat = [{"role": "user", "content": prompt}]
     if getattr(tokenizer, "chat_template", None):
-        if prompt_protocol == "no_thinking":
+        if prompt_protocol in {"no_thinking", "guided_json"}:
             try:
                 rendered = tokenizer.apply_chat_template(
                     chat,
@@ -424,6 +451,29 @@ def _encode_action_prompt(
             return list(tokenizer.encode(rendered, add_special_tokens=False))
         raise ValueError(f"unsupported action prompt protocol: {prompt_protocol}")
     return encode_prompt(tokenizer, prompt)
+
+
+def browser_action_json_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "action_type": {"type": "string", "enum": ["click", "type_text", "wait"]},
+            "selector": {"type": ["string", "null"]},
+            "text": {"type": ["string", "null"]},
+            "observed_dom_hash": {"type": ["string", "null"]},
+        },
+        "required": ["action_type", "selector", "observed_dom_hash"],
+        "additionalProperties": False,
+    }
+
+
+def _action_schema_hash() -> str:
+    return _schema_hash(browser_action_json_schema())
+
+
+def _schema_hash(schema: dict[str, Any]) -> str:
+    encoded = json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return sha256(encoded).hexdigest()
 
 
 def _record(

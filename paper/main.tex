@@ -418,9 +418,12 @@ reasoning text. Increasing the budget to 384 tokens recovers 7/9 successful
 executions, but it emits 3096 generated tokens for the nine episodes and still
 leaves two invalid-action failures. The thinking-disabled structured action
 protocol solves 9/9 episodes at both budgets while emitting only 727 generated
-tokens. This supports a concrete runtime requirement: rollout workers must
-control chat-template and decoding protocol per action channel, not simply call
-a model endpoint and hope for a valid tool call.
+tokens. A local JSON-schema constrained decoder also solves 9/9 episodes and
+removes parser failures, but reduces throughput from 34.66 to 16.62 generated
+tokens/s on this workload. This supports a concrete runtime requirement:
+rollout workers must control chat-template, decoding constraints, and token
+budget per action channel, not simply call a model endpoint and hope for a valid
+tool call.
 
 \begin{table}[t]
 \centering

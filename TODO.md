@@ -105,14 +105,15 @@ agent RL rollouts.
   - [x] 21.54 generated tokens/sec after model load
   - [x] mean generated-token logprob -0.103, min logprob -1.331
   - [x] generated-token event traces include `logprobs`
-- [x] Real model-to-action MiniWoB contract token-budget sweep：
-  - [x] Qwen3-4B action protocol ablation: 3 tasks x 3 seeds x 2 protocols x 2 budgets = 36 episodes
+- [x] Real model-to-action MiniWoB contract token-budget / constrained-decoding sweep：
+  - [x] Qwen3-4B action protocol ablation: 3 tasks x 3 seeds over 5 protocol-budget cells = 45 episodes
   - [x] 96-token default thinking protocol: 0/9 parsed actions, 0/9 success, 9 invalid-action failures
   - [x] 96-token no-thinking protocol: 9/9 parsed actions, 9/9 success, 727 generated tokens
+  - [x] 96-token guided JSON protocol: 9/9 parsed actions, 9/9 success, 727 generated tokens, 16.62 tok/s
   - [x] 384-token default thinking protocol: 7/9 parsed actions, 7/9 success, 2 invalid-action failures, 3096 generated tokens
   - [x] 384-token no-thinking protocol: 9/9 parsed actions, 9/9 success, 727 generated tokens
   - [x] traces include model request/response, proposed action, tool execution, reward, and typed failure events
-  - [x] conclusion: structured action channels require runtime-level chat-template/protocol and token-budget control
+  - [x] conclusion: structured action channels require runtime-level chat-template, constrained decoding, and token-budget control
 
 ## 1. MLSys 主线
 
@@ -148,8 +149,10 @@ Qwen reasoning/tool parser 对齐，证明 action channel 是 runtime/serving �
 - [x] Prompt-only JSON parser baseline
 - [x] Qwen3 `enable_thinking=False` action protocol
 - [x] Token-budget sweep: 96 and 384 max generated tokens
+- [x] Local guided JSON backend via LM Format Enforcer / Transformers `prefix_allowed_tokens_fn`
 - [ ] Add 1024-token budget point to show whether default thinking fully recovers or remains wasteful
 - [ ] Add guided JSON backend:
+  - [x] local Transformers guided JSON baseline
   - [ ] vLLM guided JSON if local vLLM works with Qwen3-4B
   - [ ] SGLang constrained JSON if SGLang backend is easier to stabilize
   - [ ] record backend name, schema hash, and decoding mode in traces
