@@ -14,6 +14,10 @@ and implements a minimal Python substrate for:
 The goal is not to replace AgentRL, verl, or other trainers. The package is a research
 prototype for the runtime layer beneath long-horizon agent RL rollouts.
 
+The current systems-alignment plan is in `docs/systems_alignment.md`. It tracks
+how RolloutOS should compare against structured-output serving, tool-call
+parsing, tracing, checkpointing, and rollout-as-a-service systems.
+
 ## Development
 
 ```bash

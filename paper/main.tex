@@ -528,6 +528,8 @@ The system therefore reports determinism levels rather than promising universal 
 \todo{Expand related work with complete author metadata before submission. MLSys 2026 requires each reference to list all authors explicitly.}
 Agent RL frameworks motivate the need for high-throughput multi-turn rollout production~\citep{zhang2025agentrl,prorlagent2026}.
 Agent-system reliability studies identify scheduling, context degradation, tool execution, and lifecycle bugs as recurring failure modes~\citep{agentrm2026,bugstudy2026,wherellmagentsfail2025}.
+Structured-output serving systems such as OpenAI Structured Outputs, vLLM guided decoding, and SGLang structured decoding show that reliable JSON and tool actions are runtime constraints rather than prompt conventions~\citep{openaistructuredoutputs2024,vllmstructuredoutputs2026,sglang2023}.
+Agent runtime systems such as OpenAI Agents and LangGraph expose tracing, persistence, and checkpointing as first-class execution mechanisms~\citep{openaiagentstracing2026,langgraphpersistence2026}.
 \sys{} is complementary to these efforts: it provides a rollout runtime substrate and measurement framework rather than a new agent policy or reward model.
 
 \section{Conclusion}

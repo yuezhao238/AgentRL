@@ -65,6 +65,9 @@ agent RL rollouts.
 
 ### 新增推进状态
 
+- [x] External systems alignment：
+  - [x] documented alignment with OpenAI Structured Outputs, vLLM/SGLang guided decoding, Qwen thinking controls, OpenAI Agents tracing, LangGraph persistence, and rollout-as-a-service systems in `docs/systems_alignment.md`
+  - [x] conclusion: RolloutOS must compare against structured decoding/tool-call runtimes, not only prompt-only JSON parsing
 - [x] MiniWoB++ browser contract harness：
   - [x] fixed 20-task subset schema
   - [x] browser action schema：click/type/wait
@@ -130,6 +133,43 @@ agent RL rollouts.
   - [x] `tokenizer_hash`
 - [x] Add generation-time `logprobs` from local Transformers smoke.
 - [ ] Add generation-time `logprobs` from SGLang/vLLM rollout workers.
+- [ ] Add OpenAI/LangGraph-style trace coverage matrix:
+  - [ ] model call
+  - [ ] tool call
+  - [ ] guardrail/failure event
+  - [ ] checkpoint/replay boundary
+  - [ ] determinism level
+
+### 主线 A2：Structured Action Channel
+
+目标：和 OpenAI Structured Outputs、vLLM guided decoding、SGLang structured outputs、
+Qwen reasoning/tool parser 对齐，证明 action channel 是 runtime/serving 问题。
+
+- [x] Prompt-only JSON parser baseline
+- [x] Qwen3 `enable_thinking=False` action protocol
+- [x] Token-budget sweep: 96 and 384 max generated tokens
+- [ ] Add 1024-token budget point to show whether default thinking fully recovers or remains wasteful
+- [ ] Add guided JSON backend:
+  - [ ] vLLM guided JSON if local vLLM works with Qwen3-4B
+  - [ ] SGLang constrained JSON if SGLang backend is easier to stabilize
+  - [ ] record backend name, schema hash, and decoding mode in traces
+- [ ] Add tool-call parser backend:
+  - [ ] Qwen parser/tool-call format
+  - [ ] invalid tool-call failure type separation from invalid browser action
+- [ ] Table target:
+  - [ ] prompt-default
+  - [ ] prompt-no-thinking
+  - [ ] guided-json
+  - [ ] tool-call-parser
+  - [ ] repair/retry
+- [ ] Metrics target:
+  - [ ] parse rate
+  - [ ] task success
+  - [ ] invalid-action rate
+  - [ ] generated tokens/action
+  - [ ] latency/action
+  - [ ] retry count
+  - [ ] replayability
 
 ### 主线 B：Realistic Environment Evidence
 
