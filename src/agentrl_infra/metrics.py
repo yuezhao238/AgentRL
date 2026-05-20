@@ -30,6 +30,7 @@ class EpisodeMetrics(BaseModel):
     failure_count: int
     total_reward: float
     latency_seconds: float
+    resource_cost_units: float = 0.0
     replayable: bool
     trace_path: str
 
@@ -52,7 +53,9 @@ class RunSummary(BaseModel):
     detection_accuracy: float
     macro_f1: float
     useful_trajectories_per_hour: float
+    useful_trajectories_per_cost_unit: float
     failed_rollout_cost_turns: int
+    failed_rollout_cost_units: float
     mean_turns_wasted_after_oracle: float
     mean_latency_seconds: float
     replayable_failure_count: int
@@ -70,6 +73,7 @@ def metrics_from_result(
     seed: int,
     trace_path: Path,
     replayable: bool,
+    resource_cost_units: float | None = None,
 ) -> EpisodeMetrics:
     detected = result.failure.type if result.failure else None
     success = result.state == SessionState.COMPLETED
@@ -91,6 +95,9 @@ def metrics_from_result(
         failure_count=len(result.event_log.failures()),
         total_reward=result.total_reward,
         latency_seconds=result.latency_seconds,
+        resource_cost_units=resource_cost_units
+        if resource_cost_units is not None
+        else float(max(result.turn_count, 1)),
         replayable=replayable,
         trace_path=str(trace_path),
     )
@@ -106,7 +113,9 @@ def summarize_metrics(metrics: list[EpisodeMetrics]) -> RunSummary:
             detection_accuracy=0.0,
             macro_f1=0.0,
             useful_trajectories_per_hour=0.0,
+            useful_trajectories_per_cost_unit=0.0,
             failed_rollout_cost_turns=0,
+            failed_rollout_cost_units=0.0,
             mean_turns_wasted_after_oracle=0.0,
             mean_latency_seconds=0.0,
             replayable_failure_count=0,
@@ -115,6 +124,7 @@ def summarize_metrics(metrics: list[EpisodeMetrics]) -> RunSummary:
 
     by_type = _failure_type_metrics(metrics)
     total_latency = sum(metric.latency_seconds for metric in metrics)
+    total_cost = sum(metric.resource_cost_units for metric in metrics)
     useful = sum(1 for metric in metrics if metric.replayable or metric.success)
     failures = [metric for metric in metrics if not metric.success]
     replayable_failures = sum(1 for metric in failures if metric.replayable)
@@ -128,7 +138,9 @@ def summarize_metrics(metrics: list[EpisodeMetrics]) -> RunSummary:
         detection_accuracy=correct / len(metrics),
         macro_f1=mean([item.f1 for item in by_type]) if by_type else 0.0,
         useful_trajectories_per_hour=useful / total_latency * 3600 if total_latency > 0 else 0.0,
+        useful_trajectories_per_cost_unit=useful / total_cost if total_cost > 0 else 0.0,
         failed_rollout_cost_turns=sum(metric.turn_count for metric in failures),
+        failed_rollout_cost_units=sum(metric.resource_cost_units for metric in failures),
         mean_turns_wasted_after_oracle=mean(
             [metric.turns_wasted_after_oracle for metric in metrics]
         ),
@@ -169,7 +181,9 @@ def render_summary_markdown(summary: RunSummary) -> str:
         f"- detection accuracy: {summary.detection_accuracy:.4f}",
         f"- macro F1: {summary.macro_f1:.4f}",
         f"- useful trajectories/hour: {summary.useful_trajectories_per_hour:.2f}",
+        f"- useful trajectories/cost unit: {summary.useful_trajectories_per_cost_unit:.4f}",
         f"- failed rollout cost (turns): {summary.failed_rollout_cost_turns}",
+        f"- failed rollout cost (units): {summary.failed_rollout_cost_units:.2f}",
         f"- mean wasted turns after oracle: {summary.mean_turns_wasted_after_oracle:.2f}",
         f"- mean latency seconds: {summary.mean_latency_seconds:.6f}",
         f"- replayable failure rate: {summary.replayable_failure_rate:.4f}",

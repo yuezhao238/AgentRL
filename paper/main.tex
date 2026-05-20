@@ -298,6 +298,29 @@ Metrics are useful trajectories/hour, failed rollout cost, environment-hours/suc
 We compare recreate-every-episode, blind reuse, fixed-TTL reuse, health-check reuse, and contamination-aware reuse.
 Metrics are reset latency, environment utilization, contamination rate, contamination-induced failure, and cost per successful trajectory.
 
+\subsection{FailureBench Results}
+
+Table~\ref{tab:failurebench-results} reports a local reproducible FailureBench run
+using the configuration in \texttt{experiments/configs/local\_suite.json}.
+The benchmark covers eight deterministic failure types with oracle labels.
+The raw timeout baseline detects only failures that eventually exhaust a generic
+budget, while message-only and retry-only baselines recover some tool-visible
+failures but cannot reliably distinguish policy, runtime, and environment causes.
+\sys{} detects all oracle failure types in this controlled setting, eliminates
+wasted turns after the oracle failure point, and increases replayable failed
+trajectories.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\input{tables/failurebench_summary.tex}
+}
+\caption{FailureBench detection and resource-cost results. Failed cost is measured
+in deterministic synthetic resource units, not wall-clock time.}
+\label{tab:failurebench-results}
+\end{table}
+
 \begin{table}[t]
 \centering
 \resizebox{\linewidth}{!}{%
@@ -316,7 +339,8 @@ Lifecycle & MiniWoB, SWE-bench & recreate, blind reuse & cost/success\\
 \label{tab:eval-plan}
 \end{table}
 
-\todo{Replace Table~\ref{tab:eval-plan} with measured results once experiments are implemented.}
+\todo{Extend Table~\ref{tab:failurebench-results} to the full test split and add
+real browser/tool workloads.}
 
 \section{Discussion}
 

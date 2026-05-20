@@ -1,0 +1,5 @@
+name,episodes,macro_f1,detection_accuracy,mean_wasted_turns,failed_rollout_cost_turns,failed_rollout_cost_units,replayable_failure_rate,useful_trajectories_per_cost_unit,useful_trajectories_per_hour
+raw_timeout,40,0.0,0.0,6.25,320,320.0,0.0,0.0,0.0
+message_trace,40,0.2222222222222222,0.25,0.75,100,105.0,0.25,0.09523809523809523,360000.0
+retry_only,40,0.3333333333333333,0.375,1.125,115,139.75,0.375,0.1073345259391771,469565.2173913044
+rolloutos,40,1.0,1.0,0.0,70,62.5,0.75,0.48,7532932.47845337

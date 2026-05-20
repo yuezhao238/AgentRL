@@ -13,7 +13,9 @@ def test_render_summary_latex_escapes_names() -> None:
                 detection_accuracy=0.0,
                 mean_wasted_turns=1.0,
                 failed_rollout_cost_turns=8,
+                failed_rollout_cost_units=8.0,
                 replayable_failure_rate=0.0,
+                useful_trajectories_per_cost_unit=0.0,
                 useful_trajectories_per_hour=0.0,
             )
         ]

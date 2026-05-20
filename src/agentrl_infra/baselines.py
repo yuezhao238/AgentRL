@@ -59,6 +59,7 @@ def _baseline_metric(case: FailureBenchCase, baseline: RuntimeBaseline) -> Episo
         failure_count=1 if detected else 0,
         total_reward=0.0,
         latency_seconds=0.001 * max(1, turn_count),
+        resource_cost_units=_resource_cost(case, baseline, turn_count),
         replayable=replayable,
         trace_path="",
     )
@@ -114,6 +115,22 @@ def _event_count(baseline: RuntimeBaseline, turn_count: int) -> int:
         return 2 * turn_count
     if baseline == RuntimeBaseline.RETRY_ONLY:
         return 3 * turn_count
+    raise ValueError(f"unknown baseline: {baseline}")
+
+
+def _resource_cost(case: FailureBenchCase, baseline: RuntimeBaseline, turn_count: int) -> float:
+    base = float(turn_count)
+    if baseline == RuntimeBaseline.RAW_TIMEOUT:
+        return base * 1.0
+    if baseline == RuntimeBaseline.MESSAGE_TRACE:
+        return base * 1.05
+    if baseline == RuntimeBaseline.RETRY_ONLY:
+        retries = 1 if case.oracle_failure_type in {
+            FailureType.TOOL_TIMEOUT,
+            FailureType.TOOL_EXECUTION_ERROR,
+            FailureType.RATE_LIMIT,
+        } else 0
+        return base * 1.15 + retries * 0.5
     raise ValueError(f"unknown baseline: {baseline}")
 
 

@@ -224,6 +224,7 @@ def run_failurebench(
                 seed=case.seed,
                 trace_path=trace_path,
                 replayable=report.replayable,
+                resource_cost_units=_resource_cost_units(result.turn_count),
             )
         )
     return metrics
@@ -272,6 +273,7 @@ def run_failurebench_scheduled(
             seed=case.seed,
             trace_path=trace_path,
             replayable=report.replayable,
+            resource_cost_units=_resource_cost_units(result.turn_count),
         )
 
     if scheduler_policy == "fifo":
@@ -313,6 +315,10 @@ def _initial_task_stats(cases: list[FailureBenchCase]) -> dict[str, TaskStats]:
     for case in cases:
         stats.setdefault(case.task_id, TaskStats(capacity=1, mean_cost=case.oracle_failure_turn))
     return stats
+
+
+def _resource_cost_units(turn_count: int) -> float:
+    return 0.25 + 0.75 * max(turn_count, 1)
 
 
 def rerun_failurebench_log(log: Any) -> EventLog:

@@ -15,7 +15,9 @@ class TableRow(BaseModel):
     detection_accuracy: float
     mean_wasted_turns: float
     failed_rollout_cost_turns: int
+    failed_rollout_cost_units: float
     replayable_failure_rate: float
+    useful_trajectories_per_cost_unit: float
     useful_trajectories_per_hour: float
 
 
@@ -35,7 +37,9 @@ def table_row_from_summary(name: str, summary: RunSummary) -> TableRow:
         detection_accuracy=summary.detection_accuracy,
         mean_wasted_turns=summary.mean_turns_wasted_after_oracle,
         failed_rollout_cost_turns=summary.failed_rollout_cost_turns,
+        failed_rollout_cost_units=summary.failed_rollout_cost_units,
         replayable_failure_rate=summary.replayable_failure_rate,
+        useful_trajectories_per_cost_unit=summary.useful_trajectories_per_cost_unit,
         useful_trajectories_per_hour=summary.useful_trajectories_per_hour,
     )
 
@@ -56,11 +60,11 @@ def write_summary_latex(rows: list[TableRow], path: Path) -> None:
 
 def render_summary_latex(rows: list[TableRow]) -> str:
     lines = [
-        "\\begin{tabular}{lrrrrrr}",
+        "\\begin{tabular}{lrrrrrrr}",
         "\\toprule",
         (
             "System & Episodes & Macro F1 & Acc. & Wasted Turns & "
-            "Failed Cost & Replayable \\\\"
+            "Failed Cost & Replayable & Useful/Cost \\\\"
         ),
         "\\midrule",
     ]
@@ -68,7 +72,8 @@ def render_summary_latex(rows: list[TableRow]) -> str:
         lines.append(
             f"{_escape_latex(row.name)} & {row.episodes} & {row.macro_f1:.3f} & "
             f"{row.detection_accuracy:.3f} & {row.mean_wasted_turns:.2f} & "
-            f"{row.failed_rollout_cost_turns} & {row.replayable_failure_rate:.3f} \\\\"
+            f"{row.failed_rollout_cost_units:.1f} & {row.replayable_failure_rate:.3f} & "
+            f"{row.useful_trajectories_per_cost_unit:.3f} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)
