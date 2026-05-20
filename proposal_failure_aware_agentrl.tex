@@ -1,0 +1,521 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{array}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{
+Failure-Aware and Replayable Rollout Infrastructure\\
+for Long-Horizon Agent Reinforcement Learning
+}
+
+\author{
+Anonymous Author(s)\\
+Institution\\
+\texttt{email@domain.edu}
+}
+
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Large language model (LLM) agents are increasingly trained through reinforcement learning (RL) in interactive, multi-turn environments involving tools, memory, browsers, code sandboxes, databases, mobile devices, and other stateful external systems.
+However, current Agent RL infrastructure often treats runtime failures, tool errors, environment states, and trajectory reproducibility as secondary engineering concerns.
+In practice, many high-cost rollouts fail not because the policy lacks task knowledge, but because the runtime enters an infinite loop, a tool silently times out, a browser or container state drifts, memory/context degrades, a worker disconnects, or the failure cannot be replayed and attributed.
+
+This proposal argues that Agent RL requires a dedicated rollout substrate that manages agent-environment interaction as a first-class systems problem.
+We propose a \emph{failure-aware and replayable rollout infrastructure} for long-horizon Agent RL.
+The proposed system introduces structured failure semantics, event-sourced trajectory logging, replayable tool and environment provenance, session-level watchdogs, partial trajectory salvage, and training-aware rollout scheduling.
+The goal is to convert runtime failures from noisy exceptions into structured artifacts that can improve debugging, scheduling, data quality, and ultimately reinforcement learning.
+\end{abstract}
+
+\section{Motivation}
+
+Recent Agent RL systems such as AgentRL~\cite{zhang2025agentrl} and ProRL Agent~\cite{prorlagent2026} suggest a clear trend: the bottleneck of agentic reinforcement learning is shifting from pure GPU-side optimization to scalable, reliable, and reproducible rollout production.
+Unlike conventional RLHF or single-turn preference optimization, agentic RL requires policies to interact with long-horizon, partially observable, stateful environments through tool calls and natural language observations.
+The rollout system is no longer a passive data loader; it determines which tasks are sampled, which environments are allocated, which failures are observed, which partial trajectories are retained, and which signals eventually reach the optimizer.
+
+Community and empirical evidence increasingly indicates that failures in production agent systems are often runtime failures rather than purely model reasoning failures.
+AgentRM~\cite{agentrm2026}, an analysis motivated by more than 40,000 GitHub issues across agent frameworks, identifies scheduling failures and context degradation as major classes of practical agent-system failures.
+An empirical study of 998 bug reports from CrewAI and LangChain~\cite{bugstudy2026} finds that modern LLM agent framework bugs concentrate heavily around lifecycle stages involving self-action and tool execution.
+Other recent work studies where LLM agents fail and how targeted feedback can help agents recover~\cite{wherellmagentsfail2025}.
+
+These observations expose a gap in current Agent RL infrastructure.
+A 30-turn rollout that fails at turn 27 because of a malformed tool call, stale memory entry, browser timeout, or unrecoverable environment state is not merely a failed sample.
+It is an expensive systems event containing potentially useful information:
+what state the agent reached, what action caused failure, whether the failure was model-attributable, whether the environment was contaminated, whether the session can be replayed, and whether the partial trajectory should be penalized, retried, salvaged, or discarded.
+
+The central claim of this proposal is therefore:
+
+\begin{quote}
+\emph{Agent RL infrastructure should treat runtime failures, tool interactions, and environment states as first-class training objects, not incidental execution artifacts.}
+\end{quote}
+
+\section{Research Vision}
+
+We propose to study Agent RL infrastructure as an operating-system-like layer for agent rollouts.
+Analogous to how an operating system manages processes, resources, isolation, failures, and logs, an Agent RL rollout substrate should manage sessions, tools, environments, memory/context budgets, checkpoints, permissions, and replayable traces.
+
+The proposed research focuses on three design principles.
+
+\paragraph{Failure-native execution.}
+Failures should be represented explicitly using typed semantics rather than unstructured exception strings.
+The system should distinguish model-attributable failures, tool failures, environment failures, scheduler cancellations, context-limit failures, and nondeterministic replay mismatches.
+
+\paragraph{Replayable trajectories.}
+Agent rollouts should be logged as event streams with model, token, tool, reward, and environment provenance.
+Replay should support exact replay, model-substituted replay, and environment-substituted replay.
+
+\paragraph{Training-aware rollout management.}
+The rollout scheduler should optimize useful learning signal rather than only raw request throughput.
+It should account for failure rates, reward variance, policy lag, environment cost, session age, buffer pressure, and tool reliability.
+
+\section{Research Questions}
+
+This project is organized around the following research questions:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Failure representation.}
+    How should runtime failures in long-horizon agent rollouts be represented, classified, and attributed?
+
+    \item \textbf{Replayability.}
+    Can event-sourced trajectory logging improve debugging, failure recovery, data validation, and reproducibility for Agent RL?
+
+    \item \textbf{Rollout utility.}
+    Can failure-aware rollout management increase the rate of useful trajectories compared with conventional capacity-based scheduling?
+
+    \item \textbf{Training semantics.}
+    How should structured failure signals be incorporated into RL training without introducing harmful bias or reward hacking?
+
+    \item \textbf{Environment lifecycle.}
+    Can environment snapshotting, reuse policies, and contamination checks improve throughput while preserving trajectory validity?
+\end{enumerate}
+
+\section{Proposed System}
+
+Figure~\ref{fig:architecture} summarizes the proposed system at a conceptual level.
+The system sits between RL trainers and task environments.
+It exposes a rollout API to trainers while internally managing sessions, workers, tools, environments, logs, failures, and replay.
+
+\begin{figure}[t]
+\centering
+\fbox{
+\begin{minipage}{0.92\linewidth}
+\centering
+\vspace{0.5em}
+\textbf{Trainer / Policy Optimizer}\\
+\small PPO, GRPO, RLOO, or other Agent RL objective\\
+\vspace{0.5em}
+$\downarrow$ rollout requests / $\uparrow$ token-native trajectories\\
+\vspace{0.5em}
+\textbf{Failure-Aware Replayable Rollout Substrate}\\
+\small session runtime manager \quad failure monitor \quad scheduler \quad event log \quad replay layer\\
+\vspace{0.5em}
+$\downarrow$ actions / $\uparrow$ observations, rewards, failures\\
+\vspace{0.5em}
+\textbf{Task Workers and Environments}\\
+\small tools, browsers, code sandboxes, Docker/Kubernetes pods, databases, mobile devices\\
+\vspace{0.5em}
+\end{minipage}
+}
+\caption{Conceptual architecture of the proposed rollout substrate.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Session Runtime Manager}
+
+The Session Runtime Manager treats each rollout as a managed runtime session.
+Each session has explicit metadata:
+
+\begin{itemize}[leftmargin=*]
+    \item session identifier, task identifier, and sample index;
+    \item policy version, model checkpoint hash, tokenizer hash, and chat-template hash;
+    \item allocated environment resources and tool permissions;
+    \item current turn, token budget, wall-clock budget, and cost budget;
+    \item failure state, cancellation state, and replay state.
+\end{itemize}
+
+The manager provides watchdog mechanisms for:
+
+\begin{itemize}[leftmargin=*]
+    \item per-turn and per-session timeouts;
+    \item repeated action and no-progress loop detection;
+    \item zombie session cleanup;
+    \item rate-limit backoff;
+    \item tool execution cancellation;
+    \item partial trajectory salvage.
+\end{itemize}
+
+Unlike a simple timeout wrapper, the runtime manager does not merely kill failed sessions.
+It records why a session failed, whether the failure is attributable to the policy, whether the environment must be reset, and whether the partial trajectory can still be used for training or analysis.
+
+\subsection{Failure Taxonomy and Semantics}
+
+We propose a structured failure taxonomy for Agent RL rollouts.
+Table~\ref{tab:failure-taxonomy} shows an initial taxonomy.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{p{0.27\linewidth}p{0.44\linewidth}p{0.19\linewidth}}
+\toprule
+\textbf{Failure Type} & \textbf{Description} & \textbf{Primary Attribution}\\
+\midrule
+\texttt{AGENT\_INVALID\_ACTION} & Malformed JSON, invalid tool arguments, unsupported action, or schema violation. & policy \\
+\texttt{TOOL\_TIMEOUT} & Tool call exceeds execution budget. & tool/runtime \\
+\texttt{TOOL\_EXECUTION\_ERROR} & Tool returns a typed runtime error. & tool/policy \\
+\texttt{ENV\_CRASH} & Browser, container, VM, pod, or external service becomes unavailable. & environment \\
+\texttt{ENV\_CONTAMINATION} & Environment state violates expected reset or isolation condition. & environment/runtime \\
+\texttt{CONTEXT\_LIMIT} & Session exceeds model context window or token budget. & policy/runtime \\
+\texttt{REPETITIVE\_LOOP} & Agent repeats semantically equivalent actions without progress. & policy/runtime \\
+\texttt{NO\_PROGRESS} & Observations or state metrics fail to improve across turns. & policy/environment \\
+\texttt{RATE\_LIMIT} & External API throttling or quota exhaustion. & infrastructure \\
+\texttt{SCHEDULER\_CANCELLED} & Session cancelled due to budget, preemption, or resource policy. & scheduler \\
+\texttt{UNKNOWN\_RUNTIME\_ERROR} & Uncategorized failure. & unknown \\
+\bottomrule
+\end{tabular}
+\caption{Initial failure taxonomy for long-horizon Agent RL rollouts.}
+\label{tab:failure-taxonomy}
+\end{table}
+
+Each failure type will have explicit operational semantics:
+
+\begin{itemize}[leftmargin=*]
+    \item whether the trajectory should be discarded, retained, retried, or salvaged;
+    \item whether the failure should produce negative reward, neutral reward, or no training signal;
+    \item whether the environment should be reset, snapshotted, or marked unhealthy;
+    \item whether the policy, tool, environment, scheduler, or external API should be attributed;
+    \item whether the failure is replayable.
+\end{itemize}
+
+This taxonomy is intended to be both a systems artifact and a training artifact.
+It allows the rollout infrastructure to support policy learning from failures while avoiding the mistake of penalizing the model for failures caused by infrastructure or environment nondeterminism.
+
+\subsection{Event-Sourced Trajectory Log}
+
+Current agent systems often store trajectories as flat message lists.
+This is insufficient for Agent RL because message lists omit important runtime information such as tool schemas, environment state, token spans, log probabilities, model versions, and failure provenance.
+
+We propose to store each trajectory as an event stream.
+Representative event types include:
+
+\begin{itemize}[leftmargin=*]
+    \item \texttt{SESSION\_STARTED}
+    \item \texttt{MODEL\_REQUESTED}
+    \item \texttt{MODEL\_RESPONDED}
+    \item \texttt{ACTION\_PROPOSED}
+    \item \texttt{TOOL\_CALL\_VALIDATED}
+    \item \texttt{TOOL\_CALL\_EXECUTED}
+    \item \texttt{OBSERVATION\_RETURNED}
+    \item \texttt{REWARD\_EMITTED}
+    \item \texttt{ENV\_SNAPSHOT\_CREATED}
+    \item \texttt{FAILURE\_DETECTED}
+    \item \texttt{SESSION\_CANCELLED}
+    \item \texttt{SESSION\_COMPLETED}
+\end{itemize}
+
+Each event stores structured metadata:
+
+\begin{itemize}[leftmargin=*]
+    \item timestamp and parent event identifier;
+    \item policy version, model checkpoint hash, and sampling parameters;
+    \item tokenizer hash and chat-template hash;
+    \item message span, token IDs, log probabilities, and loss mask;
+    \item tool name, schema version, arguments, result, and error code;
+    \item environment image digest, snapshot identifier, and health state;
+    \item reward, metrics, and failure label where applicable.
+\end{itemize}
+
+This representation allows the same trajectory to serve multiple purposes:
+training data, debugging trace, replay script, failure dataset, and scheduler feedback.
+
+\subsection{Token-Native Rollout Records}
+
+Many agent frameworks are message-native: they store text messages and tokenize them later during training.
+This introduces risks such as chat-template drift, tool-call parsing drift, tokenizer mismatch, and loss-mask misalignment.
+We propose a token-native trajectory format in which rollout workers record the exact token IDs, log probabilities, and loss masks used by the policy at generation time.
+
+The token-native record maintains both message-level and token-level views:
+
+\begin{itemize}[leftmargin=*]
+    \item message-level events support human inspection, tool replay, and task-level debugging;
+    \item token-level tensors support policy-gradient training without reinterpreting the trajectory.
+\end{itemize}
+
+The infrastructure will include a drift validator that checks whether replay-time tokenization matches rollout-time tokenization.
+Any mismatch can be flagged before the trajectory reaches the trainer.
+
+\subsection{Replay Layer}
+
+The replay layer supports three modes:
+
+\paragraph{Exact replay.}
+The system replays the original trajectory using recorded model outputs, tool results, environment snapshots, and rewards.
+This mode is used for debugging and auditability.
+
+\paragraph{Model-substituted replay.}
+The system replays the same environment and observation stream with a different model checkpoint.
+This mode asks whether a newer policy would avoid the same failure.
+
+\paragraph{Environment-substituted replay.}
+The system replays the same agent actions against a fresh or restored environment.
+This mode detects environment contamination, nondeterminism, and tool instability.
+
+Replay need not be perfectly deterministic for all environments.
+Instead, the system will explicitly classify replay determinism levels:
+
+\begin{itemize}[leftmargin=*]
+    \item exact deterministic replay;
+    \item deterministic replay up to external API variation;
+    \item state-equivalent replay;
+    \item partial replay only;
+    \item non-replayable trajectory.
+\end{itemize}
+
+\subsection{Failure-Aware Rollout Scheduler}
+
+Existing rollout controllers commonly dispatch tasks by worker capacity or queue order.
+However, Agent RL rollouts differ in cost and learning value.
+Some tasks are slow but informative; some frequently timeout; some have high reward variance; some use expensive environments; some are produced by stale policies.
+
+We propose a scheduler that uses training-aware signals:
+
+\begin{itemize}[leftmargin=*]
+    \item historical task success and failure rates;
+    \item expected trajectory length;
+    \item environment cost and availability;
+    \item reward variance and task diversity;
+    \item policy lag and rollout staleness;
+    \item buffer pressure and trainer consumption rate;
+    \item tool timeout rate and environment health.
+\end{itemize}
+
+Candidate scheduling policies include:
+
+\begin{itemize}[leftmargin=*]
+    \item FIFO scheduling;
+    \item capacity-only scheduling;
+    \item failure-rate-aware scheduling;
+    \item cost-aware scheduling;
+    \item reward-variance-aware scheduling;
+    \item adaptive policy-lag scheduling.
+\end{itemize}
+
+The central metric is not raw rollout throughput, but useful training signal per unit cost.
+
+\section{Integration Plan}
+
+The proposed system can be implemented as an extension to an AgentRL-style architecture.
+AgentRL already separates the controller, task worker, environment controller, trainer, actor workers, reference workers, and rollout workers~\cite{zhang2025agentrl}.
+This makes it a suitable baseline substrate.
+
+The proposed integration includes:
+
+\begin{itemize}[leftmargin=*]
+    \item extending task workers to emit typed failure events;
+    \item adding event-sourced trajectory logging between controller and worker;
+    \item adding session watchdogs and loop detectors to the controller;
+    \item extending environment controllers with snapshot, health, and contamination metadata;
+    \item adding a replay CLI for exact and substituted replay;
+    \item adding a scheduler plugin interface for failure-aware dispatch;
+    \item exporting token-native trajectories to PPO, GRPO, RLOO, or other RL trainers.
+\end{itemize}
+
+The design should remain trainer-agnostic.
+It should support AgentRL's native trainer, verl-style trainers, or custom PPO/GRPO implementations.
+
+\section{Experimental Plan}
+
+\subsection{Tasks}
+
+The evaluation should cover multiple failure modes:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Synthetic tool task.}
+    A controlled environment for injecting invalid action, timeout, schema, and retry failures.
+
+    \item \textbf{WebShop or AgentBench-style task.}
+    A multi-turn tool-use task with delayed reward and realistic interaction traces.
+
+    \item \textbf{Browser-based task.}
+    A task involving browser state, repeated actions, page-load timeouts, and visual observations.
+
+    \item \textbf{Code or shell sandbox task.}
+    A task involving execution timeouts, permission errors, filesystem side effects, and partial progress.
+
+    \item \textbf{Optional SWE-like long-horizon task.}
+    A more expensive task for studying replay, partial trajectory salvage, and state consistency.
+\end{itemize}
+
+\subsection{Baselines}
+
+We will compare against:
+
+\begin{itemize}[leftmargin=*]
+    \item standard capacity-based rollout dispatch;
+    \item message-only trajectory logging;
+    \item discard-on-failure trajectory handling;
+    \item fixed timeout policy;
+    \item no replay support;
+    \item no environment snapshot or contamination check.
+\end{itemize}
+
+\subsection{System Variants}
+
+The proposed system will be evaluated through ablations:
+
+\begin{itemize}[leftmargin=*]
+    \item runtime manager only;
+    \item event-sourced logging only;
+    \item replay layer only;
+    \item failure-aware scheduler only;
+    \item token-native validation only;
+    \item full system.
+\end{itemize}
+
+\section{Metrics}
+
+\subsection{Systems Metrics}
+
+\begin{itemize}[leftmargin=*]
+    \item completed trajectories per hour;
+    \item useful trajectories per hour;
+    \item failed trajectory ratio;
+    \item recovered or salvaged trajectory ratio;
+    \item zombie session rate;
+    \item average environment utilization;
+    \item GPU idle time due to rollout bottlenecks;
+    \item P50/P95/P99 rollout latency;
+    \item replay success rate;
+    \item logging overhead.
+\end{itemize}
+
+\subsection{Training Metrics}
+
+\begin{itemize}[leftmargin=*]
+    \item reward curve;
+    \item task success rate;
+    \item sample efficiency;
+    \item invalid action rate;
+    \item tool error rate;
+    \item context-limit failure rate;
+    \item variance across random seeds.
+\end{itemize}
+
+\subsection{Debugging and Reproducibility Metrics}
+
+\begin{itemize}[leftmargin=*]
+    \item percentage of failures with structured attribution;
+    \item time-to-root-cause in controlled debugging studies;
+    \item replay determinism level;
+    \item trajectory diff accuracy;
+    \item percentage of trajectories passing token-drift validation.
+\end{itemize}
+
+\subsection{Cost Metrics}
+
+\begin{itemize}[leftmargin=*]
+    \item environment-hours per successful trajectory;
+    \item tokens per successful trajectory;
+    \item tool calls per successful trajectory;
+    \item failed rollout cost;
+    \item useful reward events per dollar-equivalent cost.
+\end{itemize}
+
+\section{Expected Contributions}
+
+This project aims to make four primary contributions.
+
+\paragraph{A failure taxonomy for long-horizon Agent RL rollouts.}
+The taxonomy will classify runtime, tool, environment, context, scheduler, and replay failures, and specify their training and operational semantics.
+
+\paragraph{A replayable trajectory substrate.}
+The event-sourced logging layer will preserve model, token, tool, reward, and environment provenance, enabling replay, debugging, validation, and attribution.
+
+\paragraph{A failure-aware rollout manager.}
+The runtime manager will support timeout handling, loop detection, zombie cleanup, partial trajectory salvage, cancellation, and structured failure reporting.
+
+\paragraph{A training-aware scheduler.}
+The scheduler will optimize useful training signal rather than raw request throughput by accounting for failures, cost, reward variance, policy lag, and buffer pressure.
+
+\section{Why This Is Academically Interesting}
+
+The proposed work is not merely an engineering improvement to an agent framework.
+It addresses a foundational mismatch between traditional RL abstractions and modern LLM agent rollouts.
+
+In standard RL, an environment step returns an observation, reward, and termination flag.
+In Agent RL, a step may involve a model-generated tool call, schema validation, browser state, memory retrieval, external API latency, invalid actions, execution side effects, reward delays, environment contamination, and partial failures.
+The rollout system therefore becomes part of the learning algorithm: it controls which trajectories are produced, which failures are observed, how failures are attributed, and which signals reach the optimizer.
+
+This project reframes Agent RL infrastructure as a research object.
+It studies how runtime semantics, replayability, and scheduling affect training data quality and learning efficiency.
+The expected result is an infrastructure substrate that improves not only engineering reliability, but also the scientific reproducibility of Agent RL experiments.
+
+\section{Risks and Mitigations}
+
+\paragraph{Nondeterministic environments may be difficult to replay.}
+We will support graded replay determinism rather than requiring perfect replay for all tasks.
+Partial replay and state-equivalent replay can still provide useful debugging and validation.
+
+\paragraph{Failure-aware reward shaping may bias training.}
+We will separate model-attributable failures from infrastructure-attributable failures and compare discard, neutral-label, and penalty policies through ablations.
+
+\paragraph{Logging may reduce throughput.}
+We will use asynchronous event logging, configurable trace levels, compact binary tensor storage, and sampling-based full tracing for high-volume runs.
+
+\paragraph{The system may become too broad.}
+The first paper will focus on failure taxonomy, replayable trajectories, and runtime management.
+Advanced scheduling and environment snapshotting can be staged as extensions if needed.
+
+\section{Timeline}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.18\linewidth}p{0.74\linewidth}}
+\toprule
+\textbf{Period} & \textbf{Milestones} \\
+\midrule
+Month 1 & Reproduce AgentRL-style baseline; select tasks; implement initial event schema; collect baseline failure traces. \\
+Month 2 & Implement typed failure reporting, watchdogs, loop detection, timeout handling, and partial trajectory salvage. \\
+Month 3 & Implement exact replay, model-substituted replay, trajectory diff, and token-drift validation. \\
+Month 4 & Integrate with PPO/GRPO training; implement failure-aware scheduling policies; run controlled synthetic experiments. \\
+Month 5 & Run multi-task experiments; evaluate throughput, useful trajectory rate, training curves, and debugging metrics. \\
+Month 6 & Finalize ablations, write paper, package artifact, and prepare submission. \\
+\bottomrule
+\end{tabular}
+\caption{Proposed six-month research timeline.}
+\end{table}
+
+\section{Positioning}
+
+This project is complementary to AgentRL~\cite{zhang2025agentrl}, ProRL Agent~\cite{prorlagent2026}, AgentFly-style scalable agent frameworks, and trainer-oriented systems such as verl.
+It does not aim to be another monolithic Agent RL trainer.
+Instead, it targets the missing substrate beneath agentic training: reliable, failure-aware, replayable rollout production.
+
+A concise positioning statement is:
+
+\begin{quote}
+\emph{We propose an operating-system layer for Agent RL rollouts, where sessions, tools, environments, failures, and trajectories are managed as structured runtime objects. Unlike prior work that focuses mainly on training throughput or agent orchestration APIs, our system improves the reliability, reproducibility, and learning value of long-horizon agent interactions.}
+\end{quote}
+
+\bibliographystyle{plain}
+\bibliography{proposal_failure_aware_agentrl_refs}
+
+\end{document}
+
