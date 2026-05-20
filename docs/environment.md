@@ -58,3 +58,17 @@ The current machine exposes 8 NVIDIA A100-SXM4-80GB GPUs. The SGLang environment
 uses `torch==2.8.0+cu128`, which works with the installed driver. Avoid
 unconstrained latest vLLM installs on this machine: newer releases can pull
 CUDA 13 builds of PyTorch that require a newer NVIDIA driver.
+
+## Smoke checks
+
+```bash
+uv run pytest
+uv run ruff check .
+uv run agentrl-infra run-failurebench --split dev --dev-seeds-per-type 1 --test-seeds-per-type 0
+```
+
+For deterministic replay:
+
+```bash
+uv run agentrl-infra replay-trace runs/failurebench/<run_id>/traces/<sample>.jsonl --execute
+```

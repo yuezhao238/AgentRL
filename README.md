@@ -52,9 +52,18 @@ Run the deterministic synthetic failure benchmark:
 uv run agentrl-infra run-failurebench --output-dir runs/failurebench
 ```
 
+Scheduler policies are explicit:
+
+```bash
+uv run agentrl-infra run-failurebench --scheduler-policy failure_aware
+uv run agentrl-infra run-failurebench --scheduler-policy fifo
+uv run agentrl-infra run-failurebench --scheduler-policy none
+```
+
 This writes:
 
 - `config.json`
+- `schedule.json` when a scheduler policy is used
 - `traces/*.jsonl`
 - `metrics.json`
 - `summary.json`
@@ -70,6 +79,12 @@ Inspect a trace:
 
 ```bash
 uv run agentrl-infra inspect-trace runs/failurebench/<run_id>/traces/<sample>.jsonl
+```
+
+Execute deterministic replay for FailureBench:
+
+```bash
+uv run agentrl-infra replay-trace runs/failurebench/<run_id>/traces/<sample>.jsonl --execute
 ```
 
 ## Project Status

@@ -7,10 +7,13 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ..events import EventLog
 from ..failures import FailureRecord, FailureType
 from ..metrics import EpisodeMetrics, metrics_from_result
+from ..orchestrator import BatchOrchestrator, SchedulerRunSummary, fifo_decisions
 from ..replay import ReplayMode, ReplayReport
 from ..runner import EpisodeResult, EpisodeRunner, StepResult
+from ..scheduler import FailureAwareScheduler, RolloutRequest, TaskStats
 from ..session import SessionRuntimeConfig
 
 
@@ -226,6 +229,62 @@ def run_failurebench(
     return metrics
 
 
+def run_failurebench_scheduled(
+    *,
+    output_dir: Path,
+    run_id: str,
+    split: str = "all",
+    dev_seeds_per_type: int = 20,
+    test_seeds_per_type: int = 80,
+    scheduler_policy: str = "failure_aware",
+) -> SchedulerRunSummary:
+    run_dir = output_dir / run_id
+    trace_dir = run_dir / "traces"
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    cases = build_failurebench_cases(
+        split=split,
+        dev_seeds_per_type=dev_seeds_per_type,
+        test_seeds_per_type=test_seeds_per_type,
+    )
+    cases_by_sample = {case.sample_id: case for case in cases}
+    requests = [
+        RolloutRequest(
+            task_id=case.task_id,
+            sample_id=case.sample_id,
+            priority=1.0,
+            estimated_cost=float(case.oracle_failure_turn),
+        )
+        for case in cases
+    ]
+
+    def execute(request: RolloutRequest) -> EpisodeMetrics:
+        case = cases_by_sample[request.sample_id]
+        result = run_failurebench_case(case)
+        trace_path = trace_dir / f"{case.sample_id}.jsonl"
+        result.event_log.save_jsonl(trace_path)
+        report = ReplayReport.from_log(result.event_log, ReplayMode.EXACT)
+        return metrics_from_result(
+            result,
+            oracle_failure_type=case.oracle_failure_type,
+            oracle_failure_turn=case.oracle_failure_turn,
+            scenario=case.scenario.value,
+            split=case.split,
+            seed=case.seed,
+            trace_path=trace_path,
+            replayable=report.replayable,
+        )
+
+    if scheduler_policy == "fifo":
+        return fifo_decisions(requests, execute)
+    if scheduler_policy != "failure_aware":
+        raise ValueError(f"unknown scheduler policy: {scheduler_policy}")
+    return BatchOrchestrator(FailureAwareScheduler()).run(
+        requests,
+        _initial_task_stats(cases),
+        execute,
+    )
+
+
 def run_failurebench_case(case: FailureBenchCase) -> EpisodeResult:
     config = SessionRuntimeConfig(
         max_turns=4 if case.scenario == FailureBenchScenario.CONTEXT_LIMIT else 16,
@@ -246,6 +305,42 @@ def run_failurebench_case(case: FailureBenchCase) -> EpisodeResult:
             "seed": case.seed,
             "split": case.split,
         },
+    )
+
+
+def _initial_task_stats(cases: list[FailureBenchCase]) -> dict[str, TaskStats]:
+    stats: dict[str, TaskStats] = {}
+    for case in cases:
+        stats.setdefault(case.task_id, TaskStats(capacity=1, mean_cost=case.oracle_failure_turn))
+    return stats
+
+
+def rerun_failurebench_log(log: Any) -> EventLog:
+    case = case_from_failurebench_log(log)
+    return run_failurebench_case(case).event_log
+
+
+def case_from_failurebench_log(log: Any) -> FailureBenchCase:
+    if not log.events:
+        raise ValueError("cannot reconstruct FailureBench case from empty log")
+    start = log.events[0]
+    metadata = start.payload.get("metadata", {})
+    if metadata.get("benchmark") != "failurebench":
+        raise ValueError("trace does not contain FailureBench metadata")
+    scenario = FailureBenchScenario(metadata["scenario"])
+    seed = int(metadata["seed"])
+    split = str(metadata["split"])
+    return FailureBenchCase(
+        scenario=scenario,
+        seed=seed,
+        split=split,
+        task_id=f"failurebench/{scenario.value}",
+        sample_id=log.sample_id or f"{split}-{scenario.value}-{seed:04d}",
+        oracle_failure_type=scenario.failure_type,
+        oracle_failure_turn=_oracle_failure_turn(scenario),
+        oracle_attribution=_oracle_attribution(scenario.failure_type),
+        oracle_replayable=_oracle_replayable(scenario.failure_type),
+        expected_salvageable=_oracle_salvageable(scenario.failure_type),
     )
 
 
