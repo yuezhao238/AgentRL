@@ -18,6 +18,10 @@ from .benchmarks.failurebench import (
     run_failurebench_scheduled,
 )
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.model_generation import (
+    DEFAULT_GENERATION_MODEL_IDS,
+    run_model_generation_smoke,
+)
 from .benchmarks.model_provenance import DEFAULT_MODEL_IDS, run_model_provenance_audit
 from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
 from .compare import compare_metric_files
@@ -54,6 +58,10 @@ THROUGHPUT_POLICY_OPTION = typer.Option(ThroughputPolicy.FAILURE_AWARE, help="Po
 MODEL_OUTPUT_DIR_OPTION = typer.Option(
     Path("runs/model_provenance"),
     help="Directory for model provenance audit outputs.",
+)
+GENERATION_OUTPUT_DIR_OPTION = typer.Option(
+    Path("runs/model_generation"),
+    help="Directory for local model generation smoke outputs.",
 )
 EXPERIMENT_OUTPUT_DIR_OPTION = typer.Option(
     Path("runs/experiments"),
@@ -250,6 +258,28 @@ def run_model_provenance(
         output_dir=output_dir,
         run_id=run_id,
         model_ids=model_ids,
+    )
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in summaries], indent=2))
+
+
+@app.command("run-model-generation-smoke")
+def run_model_generation_smoke_cmd(
+    output_dir: Path = GENERATION_OUTPUT_DIR_OPTION,
+    run_id: str | None = RUN_ID_OPTION,
+    models: str = typer.Option(
+        ",".join(DEFAULT_GENERATION_MODEL_IDS),
+        help="Comma-separated Hugging Face causal LM ids.",
+    ),
+    max_new_tokens: int = typer.Option(32, help="Maximum generated tokens per prompt."),
+) -> None:
+    """Run local Transformers generation and record token/logprob traces."""
+    run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    model_ids = [item for item in models.split(",") if item]
+    summaries = run_model_generation_smoke(
+        output_dir=output_dir,
+        run_id=run_id,
+        model_ids=model_ids,
+        max_new_tokens=max_new_tokens,
     )
     typer.echo(json.dumps([item.model_dump(mode="json") for item in summaries], indent=2))
 

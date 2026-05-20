@@ -96,6 +96,12 @@ agent RL rollouts.
   - [x] Qwen/Qwen3-8B：mean 20.0 prompt tokens, max 23, drift 3/3
   - [x] meta-llama/Llama-3.1-8B-Instruct：mean 46.7 prompt tokens, max 50, drift 3/3
   - [x] token-native JSONL traces include `model_version`, `tokenizer_hash`, `token_ids`, `loss_mask`
+- [x] Real local model generation smoke：
+  - [x] Qwen/Qwen3-4B loaded with `AutoModelForCausalLM`
+  - [x] 3 prompts, 60 input tokens, 96 generated tokens
+  - [x] 21.54 generated tokens/sec after model load
+  - [x] mean generated-token logprob -0.103, min logprob -1.331
+  - [x] generated-token event traces include `logprobs`
 
 ## 1. MLSys 主线
 
@@ -114,6 +120,7 @@ agent RL rollouts.
   - [x] `loss_mask`
   - [x] `model_version`
   - [x] `tokenizer_hash`
+- [x] Add generation-time `logprobs` from local Transformers smoke.
 - [ ] Add generation-time `logprobs` from SGLang/vLLM rollout workers.
 
 ### 主线 B：Realistic Environment Evidence
@@ -169,7 +176,8 @@ agent RL rollouts.
 - [ ] SGLang rollout client
 - [ ] vLLM rollout client
 - [x] tokenizer-level token-native trace export
-- [ ] generation-level token-native trace export with logprobs
+- [x] generation-level token-native trace export with logprobs for local model smoke
+- [ ] generation-level token-native trace export with logprobs for served SGLang/vLLM workers
 - [ ] lightweight GRPO prototype for smoke validation
 - [ ] connect to AgentRL/verl trainer for formal curves
 - [ ] WebShop/AgentBench WS training run:

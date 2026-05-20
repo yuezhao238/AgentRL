@@ -22,6 +22,7 @@ def test_run_experiment_suite_smoke(tmp_path) -> None:
             miniwob_seeds=[1000],
             throughput_workers=2,
             model_provenance_model_ids=[],
+            model_generation_model_ids=[],
         )
     )
 

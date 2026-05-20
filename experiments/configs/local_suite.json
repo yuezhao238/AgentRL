@@ -40,5 +40,9 @@
     "Qwen/Qwen3-4B",
     "Qwen/Qwen3-8B",
     "meta-llama/Llama-3.1-8B-Instruct"
-  ]
+  ],
+  "model_generation_model_ids": [
+    "Qwen/Qwen3-4B"
+  ],
+  "model_generation_max_new_tokens": 32
 }

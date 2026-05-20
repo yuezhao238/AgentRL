@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .benchmarks.lifecycle import LifecycleSummary
+from .benchmarks.model_generation import ModelGenerationSummary
 from .benchmarks.model_provenance import ModelProvenanceSummary
 from .benchmarks.throughput import ThroughputSummary
 from .integrations.miniwob import MiniWoBRunSummary
@@ -77,6 +78,18 @@ class ModelProvenanceTableRow(BaseModel):
     drift_validated: str
     load_seconds: float
     tokenizer_hash_prefix: str
+
+
+class ModelGenerationTableRow(BaseModel):
+    model_id: str
+    prompts: int
+    prompt_tokens: int
+    generated_tokens: int
+    load_seconds: float
+    latency_seconds: float
+    tokens_per_second: float
+    mean_logprob: float
+    min_logprob: float
 
 
 def build_summary_rows(inputs: dict[str, Path]) -> list[TableRow]:
@@ -269,6 +282,41 @@ def write_model_provenance_latex(rows: list[ModelProvenanceTableRow], path: Path
     path.write_text(render_model_provenance_latex(rows), encoding="utf-8")
 
 
+def build_model_generation_rows(path: Path) -> list[ModelGenerationTableRow]:
+    summaries = [
+        ModelGenerationSummary.model_validate(item)
+        for item in json.loads(path.read_text(encoding="utf-8"))
+    ]
+    return [
+        ModelGenerationTableRow(
+            model_id=summary.model_id,
+            prompts=summary.prompt_count,
+            prompt_tokens=summary.prompt_tokens,
+            generated_tokens=summary.generated_tokens,
+            load_seconds=summary.load_seconds,
+            latency_seconds=summary.total_latency_seconds,
+            tokens_per_second=summary.tokens_per_second,
+            mean_logprob=summary.mean_logprob,
+            min_logprob=summary.min_logprob,
+        )
+        for summary in summaries
+    ]
+
+
+def write_model_generation_csv(rows: list[ModelGenerationTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(ModelGenerationTableRow.model_fields))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.model_dump())
+
+
+def write_model_generation_latex(rows: list[ModelGenerationTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_model_generation_latex(rows), encoding="utf-8")
+
+
 def render_summary_latex(rows: list[TableRow]) -> str:
     lines = [
         "\\begin{tabular}{lrrrrrrr}",
@@ -355,6 +403,23 @@ def render_model_provenance_latex(rows: list[ModelProvenanceTableRow]) -> str:
             f"{_escape_latex(_short_model_id(row.model_id))} & {row.vocab_size} & "
             f"{row.prompt_count} & {row.mean_prompt_tokens:.1f} & "
             f"{row.max_prompt_tokens} & {row.drift_validated} \\\\"
+        )
+    lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    return "\n".join(lines)
+
+
+def render_model_generation_latex(rows: list[ModelGenerationTableRow]) -> str:
+    lines = [
+        "\\begin{tabular}{lrrrrrr}",
+        "\\toprule",
+        "Model & Prompts & In Tok. & Out Tok. & Load s & Tok/s & Mean Logp \\\\",
+        "\\midrule",
+    ]
+    for row in rows:
+        lines.append(
+            f"{_escape_latex(_short_model_id(row.model_id))} & {row.prompts} & "
+            f"{row.prompt_tokens} & {row.generated_tokens} & {row.load_seconds:.1f} & "
+            f"{row.tokens_per_second:.2f} & {row.mean_logprob:.3f} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)

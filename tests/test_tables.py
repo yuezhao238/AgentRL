@@ -3,11 +3,13 @@ from __future__ import annotations
 from agentrl_infra.tables import (
     LifecycleTableRow,
     MiniWoBContractTableRow,
+    ModelGenerationTableRow,
     ModelProvenanceTableRow,
     TableRow,
     ThroughputTableRow,
     render_lifecycle_latex,
     render_miniwob_contract_latex,
+    render_model_generation_latex,
     render_model_provenance_latex,
     render_summary_latex,
     render_throughput_latex,
@@ -129,3 +131,24 @@ def test_render_model_provenance_latex() -> None:
 
     assert "Qwen3-4B" in latex
     assert "Drift Valid" in latex
+
+
+def test_render_model_generation_latex() -> None:
+    latex = render_model_generation_latex(
+        [
+            ModelGenerationTableRow(
+                model_id="Qwen/Qwen3-4B",
+                prompts=3,
+                prompt_tokens=60,
+                generated_tokens=96,
+                load_seconds=10.0,
+                latency_seconds=2.0,
+                tokens_per_second=48.0,
+                mean_logprob=-0.5,
+                min_logprob=-2.0,
+            )
+        ]
+    )
+
+    assert "Qwen3-4B" in latex
+    assert "Tok/s" in latex

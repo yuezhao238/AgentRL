@@ -373,6 +373,34 @@ preserves the recorded token IDs.}
 \label{tab:model-provenance-results}
 \end{table}
 
+\subsection{Local Model Generation Smoke Results}
+
+Table~\ref{tab:model-generation-results} reports the first end-to-end local
+model generation run. Unlike the tokenizer audit, this experiment loads
+Qwen3-4B with \texttt{AutoModelForCausalLM}, renders the same agent prompts,
+generates 32 tokens per prompt with greedy decoding, computes transition
+log-probabilities, and writes both request and response events with
+\texttt{model\_version}, \texttt{tokenizer\_hash}, \texttt{token\_ids},
+\texttt{logprobs}, and \texttt{loss\_mask}. This is still a smoke-scale model
+experiment rather than a task-success result, but it closes the missing systems
+path from model execution to token-native rollout traces.
+
+On a local A100, Qwen3-4B generates 96 output tokens for three prompts at 21.54
+tokens/s after loading, with mean generated-token log-probability -0.103. The
+trace contains exact per-token log-probabilities for training export and replay
+inspection.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\input{tables/model_generation_summary.tex}
+}
+\caption{Local Qwen3-4B generation smoke test with token-native event traces.
+Latency excludes model loading; Load s reports local checkpoint load time.}
+\label{tab:model-generation-results}
+\end{table}
+
 \subsection{Worker-Pool Throughput Results}
 
 Table~\ref{tab:throughput-results} reports a deterministic worker-pool

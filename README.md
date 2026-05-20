@@ -133,6 +133,12 @@ Audit local model tokenizer provenance and token-native trace metadata:
 uv run agentrl-infra run-model-provenance --models Qwen/Qwen3-4B,Qwen/Qwen3-8B
 ```
 
+Run a local Transformers generation smoke test with token logprobs:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run agentrl-infra run-model-generation-smoke --models Qwen/Qwen3-4B
+```
+
 Run the local experiment suite and generate paper-ready CSV/LaTeX tables:
 
 ```bash

@@ -1,0 +1,2 @@
+model_id,prompts,prompt_tokens,generated_tokens,load_seconds,latency_seconds,tokens_per_second,mean_logprob,min_logprob
+Qwen/Qwen3-4B,3,60,96,6.552733801305294,4.456256194040179,21.542747054891258,-0.10288729941301582,-1.3311901092529297

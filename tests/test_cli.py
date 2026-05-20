@@ -95,3 +95,23 @@ def test_run_model_provenance_cli_empty_smoke(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert (tmp_path / "smoke" / "model_provenance_summary.json").exists()
+
+
+def test_run_model_generation_cli_empty_smoke(tmp_path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "run-model-generation-smoke",
+            "--output-dir",
+            str(tmp_path),
+            "--run-id",
+            "smoke",
+            "--models",
+            "",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "smoke" / "model_generation_summary.json").exists()

@@ -14,6 +14,7 @@ from .artifacts import (
 from .baselines import RuntimeBaseline, evaluate_failurebench_baseline
 from .benchmarks.failurebench import run_failurebench_scheduled
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.model_generation import run_model_generation_smoke
 from .benchmarks.model_provenance import DEFAULT_MODEL_IDS, run_model_provenance_audit
 from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
 from .integrations.miniwob import MINIWOB_20_TASKS, run_miniwob_contract_subset
@@ -21,6 +22,7 @@ from .metrics import save_metrics
 from .tables import (
     build_lifecycle_rows,
     build_miniwob_contract_rows,
+    build_model_generation_rows,
     build_model_provenance_rows,
     build_summary_rows,
     build_throughput_rows,
@@ -28,6 +30,8 @@ from .tables import (
     write_lifecycle_latex,
     write_miniwob_contract_csv,
     write_miniwob_contract_latex,
+    write_model_generation_csv,
+    write_model_generation_latex,
     write_model_provenance_csv,
     write_model_provenance_latex,
     write_summary_csv,
@@ -57,6 +61,8 @@ class ExperimentSuiteConfig(BaseModel):
     )
     throughput_workers: int = 8
     model_provenance_model_ids: list[str] = Field(default_factory=lambda: list(DEFAULT_MODEL_IDS))
+    model_generation_model_ids: list[str] = Field(default_factory=list)
+    model_generation_max_new_tokens: int = 32
 
 
 class ExperimentSuiteReport(BaseModel):
@@ -66,6 +72,7 @@ class ExperimentSuiteReport(BaseModel):
     miniwob_runs: dict[str, str] = Field(default_factory=dict)
     throughput_runs: dict[str, str] = Field(default_factory=dict)
     model_provenance_run: str | None = None
+    model_generation_run: str | None = None
     tables: dict[str, str] = Field(default_factory=dict)
 
 
@@ -173,6 +180,19 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
         model_provenance_dir / "tokenizer_audit" / "model_provenance_summary.json"
     )
 
+    model_generation_summary_path: Path | None = None
+    if config.model_generation_model_ids:
+        model_generation_dir = suite_dir / "model_generation"
+        run_model_generation_smoke(
+            output_dir=model_generation_dir,
+            run_id="generation_smoke",
+            model_ids=config.model_generation_model_ids,
+            max_new_tokens=config.model_generation_max_new_tokens,
+        )
+        model_generation_summary_path = (
+            model_generation_dir / "generation_smoke" / "model_generation_summary.json"
+        )
+
     rows = build_summary_rows({name: Path(path) for name, path in failurebench_runs.items()})
     table_dir = suite_dir / "tables"
     csv_path = table_dir / "failurebench_summary.csv"
@@ -210,6 +230,31 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     write_model_provenance_csv(model_rows, model_csv_path)
     write_model_provenance_latex(model_rows, model_tex_path)
 
+    model_generation_csv_path: Path | None = None
+    model_generation_tex_path: Path | None = None
+    if model_generation_summary_path is not None:
+        generation_rows = build_model_generation_rows(model_generation_summary_path)
+        model_generation_csv_path = table_dir / "model_generation_summary.csv"
+        model_generation_tex_path = table_dir / "model_generation_summary.tex"
+        write_model_generation_csv(generation_rows, model_generation_csv_path)
+        write_model_generation_latex(generation_rows, model_generation_tex_path)
+
+    tables = {
+        "failurebench_summary_csv": str(csv_path),
+        "failurebench_summary_tex": str(tex_path),
+        "lifecycle_summary_csv": str(lifecycle_csv_path),
+        "lifecycle_summary_tex": str(lifecycle_tex_path),
+        "miniwob_contract_summary_csv": str(miniwob_csv_path),
+        "miniwob_contract_summary_tex": str(miniwob_tex_path),
+        "throughput_summary_csv": str(throughput_csv_path),
+        "throughput_summary_tex": str(throughput_tex_path),
+        "model_provenance_summary_csv": str(model_csv_path),
+        "model_provenance_summary_tex": str(model_tex_path),
+    }
+    if model_generation_csv_path and model_generation_tex_path:
+        tables["model_generation_summary_csv"] = str(model_generation_csv_path)
+        tables["model_generation_summary_tex"] = str(model_generation_tex_path)
+
     report = ExperimentSuiteReport(
         suite_dir=str(suite_dir),
         failurebench_runs=failurebench_runs,
@@ -217,18 +262,10 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
         miniwob_runs=miniwob_runs,
         throughput_runs=throughput_runs,
         model_provenance_run=str(model_provenance_summary_path),
-        tables={
-            "failurebench_summary_csv": str(csv_path),
-            "failurebench_summary_tex": str(tex_path),
-            "lifecycle_summary_csv": str(lifecycle_csv_path),
-            "lifecycle_summary_tex": str(lifecycle_tex_path),
-            "miniwob_contract_summary_csv": str(miniwob_csv_path),
-            "miniwob_contract_summary_tex": str(miniwob_tex_path),
-            "throughput_summary_csv": str(throughput_csv_path),
-            "throughput_summary_tex": str(throughput_tex_path),
-            "model_provenance_summary_csv": str(model_csv_path),
-            "model_provenance_summary_tex": str(model_tex_path),
-        },
+        model_generation_run=str(model_generation_summary_path)
+        if model_generation_summary_path
+        else None,
+        tables=tables,
     )
     (suite_dir / "suite_report.json").write_text(
         report.model_dump_json(indent=2) + "\n",
