@@ -1,6 +1,7 @@
 """Failure-aware and replayable rollout infrastructure primitives."""
 
 from .events import Event, EventLog, EventType
+from .experiments import ExperimentSuiteConfig, ExperimentSuiteReport
 from .failures import FailureRecord, FailureSemantics, FailureType
 from .metrics import EpisodeMetrics, RunSummary
 from .orchestrator import BatchOrchestrator, SchedulerRunSummary
@@ -20,6 +21,8 @@ __all__ = [
     "Event",
     "EventLog",
     "EventType",
+    "ExperimentSuiteConfig",
+    "ExperimentSuiteReport",
     "EpisodeMetrics",
     "EpisodeResult",
     "EpisodeRunner",

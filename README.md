@@ -108,6 +108,17 @@ uv run agentrl-infra run-lifecycle-bench --policy blind_reuse
 uv run agentrl-infra run-lifecycle-bench --policy contamination_aware
 ```
 
+Run the local experiment suite and generate paper-ready CSV/LaTeX tables:
+
+```bash
+uv run agentrl-infra run-experiment-suite --suite-id local-suite
+uv run agentrl-infra run-experiment-suite --config-path experiments/configs/local_suite.json
+```
+
+This runs FailureBench baselines, the RolloutOS configuration, lifecycle policies,
+artifact validation, batch replay, and writes tables under
+`runs/experiments/<suite_id>/tables/`.
+
 ## Project Status
 
 This is an early research codebase. APIs are intentionally small and explicit so that

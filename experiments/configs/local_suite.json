@@ -1,0 +1,8 @@
+{
+  "suite_id": "local-suite",
+  "output_dir": "runs/experiments",
+  "split": "dev",
+  "dev_seeds_per_type": 5,
+  "test_seeds_per_type": 0,
+  "lifecycle_episodes": 50
+}

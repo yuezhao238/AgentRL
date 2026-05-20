@@ -20,6 +20,7 @@ from .benchmarks.failurebench import (
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
 from .compare import compare_metric_files
 from .events import EventLog
+from .experiments import ExperimentSuiteConfig, load_experiment_suite_config, run_experiment_suite
 from .metrics import load_metrics, save_metrics, summarize_metrics
 from .replay import ReplayEngine, ReplayMode, ReplayReport, validate_event_log
 
@@ -41,6 +42,12 @@ LIFECYCLE_OUTPUT_DIR_OPTION = typer.Option(
 LIFECYCLE_POLICY_OPTION = typer.Option(ReusePolicy.CONTAMINATION_AWARE, help="Reuse policy.")
 LIFECYCLE_EPISODES_OPTION = typer.Option(100, help="Number of synthetic episodes.")
 LIFECYCLE_TTL_OPTION = typer.Option(5, help="TTL for fixed_ttl reuse.")
+EXPERIMENT_OUTPUT_DIR_OPTION = typer.Option(
+    Path("runs/experiments"),
+    help="Suite output root.",
+)
+SUITE_ID_OPTION = typer.Option("local-suite", help="Suite identifier.")
+SUITE_CONFIG_PATH_OPTION = typer.Option(None, help="Optional JSON suite config.")
 
 
 @app.command()
@@ -197,3 +204,29 @@ def compare_runs(baseline_metrics: Path, candidate_metrics: Path) -> None:
     """Compare two metrics.json files."""
     comparison = compare_metric_files(baseline_metrics, candidate_metrics)
     typer.echo(comparison.model_dump_json(indent=2))
+
+
+@app.command("run-experiment-suite")
+def run_experiment_suite_cmd(
+    config_path: Path | None = SUITE_CONFIG_PATH_OPTION,
+    output_dir: Path = EXPERIMENT_OUTPUT_DIR_OPTION,
+    suite_id: str = SUITE_ID_OPTION,
+    split: str = SPLIT_OPTION,
+    dev_seeds_per_type: int = typer.Option(5, help="Dev seeds per FailureBench type."),
+    test_seeds_per_type: int = typer.Option(0, help="Test seeds per FailureBench type."),
+    lifecycle_episodes: int = typer.Option(50, help="Lifecycle benchmark episode count."),
+) -> None:
+    """Run reproducible local experiments and generate paper-ready tables."""
+    if config_path:
+        config = load_experiment_suite_config(config_path)
+    else:
+        config = ExperimentSuiteConfig(
+            suite_id=suite_id,
+            output_dir=output_dir,
+            split=split,
+            dev_seeds_per_type=dev_seeds_per_type,
+            test_seeds_per_type=test_seeds_per_type,
+            lifecycle_episodes=lifecycle_episodes,
+        )
+    report = run_experiment_suite(config)
+    typer.echo(report.model_dump_json(indent=2))
