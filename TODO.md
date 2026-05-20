@@ -1,590 +1,315 @@
-# AgentRL Infra 投稿实验 TODO
+# RolloutOS / AgentRL Infra TODO
 
 Last updated: 2026-05-20
 
-目标论文主张：
+目标：把本仓库推进成 MLSys 系统论文，而不是 Agent RL 算法论文。
+
+核心主张：
 
 > Failure-aware, replayable rollout infrastructure improves Agent RL data quality,
-> debugging efficiency, and training sample efficiency under realistic long-horizon
+> debugging efficiency, and environment/GPU efficiency under realistic long-horizon
 > agent failures.
 
-本文件把模型、任务、数据集、baseline、指标和阶段任务固定下来，作为后续实现与实验的执行清单。
+当前论文名暂定为 **RolloutOS**：a failure-aware, replayable runtime for long-horizon
+agent RL rollouts.
 
-## 0. 固定实验栈
+## 0. 当前基线状态
 
-### 0.1 代码与依赖
+### 已完成并进入主线
 
-- [x] 使用 `git` 管理项目。
-- [x] 使用 `uv` 管理 Python 依赖。
-- [x] 创建 package：`agentrl_infra`。
-- [x] 初版模块：
-  - [x] failure taxonomy: `src/agentrl_infra/failures.py`
-  - [x] event log: `src/agentrl_infra/events.py`
-  - [x] session runtime: `src/agentrl_infra/session.py`
-  - [x] replay report: `src/agentrl_infra/replay.py`
-  - [x] scheduler: `src/agentrl_infra/scheduler.py`
-- [x] 单元测试：`uv run pytest`
-- [x] lint：`uv run ruff check .`
+- [x] Python package：`agentrl_infra`
+- [x] 依赖管理：`uv`
+- [x] 模型缓存准备：
+  - [x] `Qwen/Qwen3-4B`
+  - [x] `Qwen/Qwen3-8B`
+  - [x] `Qwen/Qwen3-32B`
+  - [x] `meta-llama/Llama-3.1-8B-Instruct`
+- [x] Runtime primitives：
+  - [x] typed failure taxonomy：`src/agentrl_infra/failures.py`
+  - [x] event-sourced trace：`src/agentrl_infra/events.py`
+  - [x] session watchdog：`src/agentrl_infra/session.py`
+  - [x] episode runner：`src/agentrl_infra/runner.py`
+  - [x] environment/tool protocols：`src/agentrl_infra/resources.py`
+  - [x] failure-aware scheduler：`src/agentrl_infra/scheduler.py`
+  - [x] executable replay：`src/agentrl_infra/replay.py`
+- [x] Synthetic systems workloads：
+  - [x] FailureBench：8 类 deterministic rollout failure
+  - [x] mutable environment lifecycle benchmark
+- [x] Baselines：
+  - [x] raw timeout
+  - [x] message trace
+  - [x] retry-only
+  - [x] FIFO/capacity scheduler baseline
+- [x] Automation：
+  - [x] run validation
+  - [x] batch replay validation
+  - [x] run comparison
+  - [x] one-shot local experiment suite
+  - [x] paper CSV/LaTeX table generation
+- [x] Paper：
+  - [x] MLSys template
+  - [x] initial `paper/main.tex`
+  - [x] FailureBench table
+  - [x] lifecycle table
 
-### 0.2 固定模型
+### 当前关键结果
 
-主实验优先使用开源权重，保证可复现；闭源模型只作为上界或 debug oracle。
+- [x] FailureBench synthetic：
+  - [x] `rolloutos` macro F1 = 1.000
+  - [x] `rolloutos` useful/cost = 0.480
+  - [x] baselines range from 0.000 to 0.333 macro F1
+- [x] Lifecycle synthetic：
+  - [x] recreate：50/50 success, cost/success 1.100
+  - [x] blind reuse：1/50 success, 49 contamination failures
+  - [x] contamination-aware：50/50 success, cost/success 0.316
 
-#### 训练/rollout 主模型
+### 新增推进状态
 
-- [ ] `Qwen/Qwen3-8B`
-  - 用途：主训练模型、主 rollout 模型。
-  - 原因：8B 规模适中，可在 1-2 张 80GB GPU 或量化环境中迭代；Hugging Face 已支持 `transformers`。
-  - 推理后端：`vLLM` 或 `SGLang`，优先 `SGLang` 以便与 AgentRL 风格保持一致。
-  - 训练方式：LoRA/QLoRA smoke test；正式实验用 full fine-tune 或 FSDP/LoRA 视资源决定。
+- [x] MiniWoB++ browser contract harness：
+  - [x] fixed 20-task subset schema
+  - [x] browser action schema：click/type/wait
+  - [x] DOM observation schema with stable DOM hash
+  - [x] stale-DOM detection
+  - [x] invalid action detection
+  - [x] no-progress detection through runtime watchdog
+  - [x] environment health check
+  - [x] contamination check
+  - [x] deterministic trace emission
+  - [x] CLI：`agentrl-infra run-miniwob-contract`
 
-#### 低成本 smoke model
+## 1. MLSys 主线
 
-- [ ] `Qwen/Qwen3-4B`
-  - 用途：CI/smoke、synthetic failure benchmark、开发时快速回归。
-  - 不作为主论文结论模型。
+### 主线 A：Rollout Runtime
 
-#### 跨模型泛化评估
+目标：证明 typed failure + replay + scheduler 是一个系统 runtime，而不是算法 trick。
 
-- [ ] `meta-llama/Llama-3.1-8B-Instruct`
-  - 用途：证明 failure-aware runtime 不依赖 Qwen tokenizer/template。
-  - 只做 rollout/eval，不做主训练。
+- [x] Event log captures session/model/action/tool/reward/failure events.
+- [x] Failure semantics define retryability, salvageability, reset requirement, and training signal.
+- [x] Runtime watchdog catches turn budget, repeated action, and no-progress failures.
+- [x] Replay validates event-log structure and deterministic executable replay.
+- [x] Scheduler uses failure-aware priority and cancellation semantics.
+- [ ] Add resource accounting for wall-clock, CPU, GPU, browser, and storage overhead.
+- [ ] Add token-native trajectory fields for real model rollouts:
+  - [ ] `input_ids`
+  - [ ] `logprobs`
+  - [ ] `loss_mask`
+  - [ ] `model_version`
+  - [ ] `tokenizer_hash`
 
-#### 强模型上界 / oracle
+### 主线 B：Realistic Environment Evidence
 
-- [ ] `Qwen/Qwen3-32B`
-  - 用途：较强开源上界，可用于 replay 中的 model-substituted replay。
-  - 如本地资源不足，改用 API 托管版本。
+优先级：MiniWoB++ > WebShop/AgentBench WS > SWE-bench Debug。
 
-- [ ] `gpt-5-mini` 或当前可用等价闭源模型
-  - 用途：少量 root-cause oracle / debugging user study 辅助，不作为主训练模型。
-  - 注意：所有主结果必须能在开源模型上复现。
+原因：MiniWoB++ 最直接暴露系统问题：browser reset、DOM stale state、重复点击、
+页面等待、环境污染和 replay mismatch。
 
-### 0.3 固定推理/训练后端
+- [x] MiniWoB++ deterministic contract harness
+- [ ] Live MiniWoB++ browser binding:
+  - [ ] install/lock browser dependency
+  - [ ] launch task by name/seed
+  - [ ] extract DOM/actionable elements
+  - [ ] execute click/type/wait actions
+  - [ ] capture reward/done
+  - [ ] expose health/contamination checks
+  - [ ] save screenshots or DOM snapshots for replay debugging
+- [ ] MiniWoB++ lifecycle experiment:
+  - [ ] recreate
+  - [ ] blind reuse
+  - [ ] fixed TTL
+  - [ ] health check
+  - [ ] contamination-aware reuse
+- [ ] MiniWoB++ replay experiment:
+  - [ ] exact replay
+  - [ ] environment-substituted replay
+  - [ ] stale DOM mismatch report
+  - [ ] reward/done divergence report
 
-- [ ] 推理后端：
-  - [ ] 首选：SGLang
-  - [ ] 备用：vLLM
-- [ ] 训练后端：
-  - [ ] Phase 1：本项目轻量 GRPO prototype，只用于 synthetic 和小任务验证。
-  - [ ] Phase 2：接入 AgentRL trainer 或 verl trainer，做正式训练曲线。
-- [ ] 统一接口：
-  - [ ] OpenAI-compatible chat endpoint
-  - [ ] token-native trace export：`input_ids`、`logprobs`、`loss_mask`、`model_version`
+### 主线 C：Throughput and Scheduling
 
-## 1. 固定任务与数据集
+目标：把“检测更准”推进到“单位资源产出更多可用轨迹”。
 
-实验分四类：synthetic controllable、tool/web、browser、code/sandbox。
-
-### 1.1 Synthetic FailureBench-AgentRL
-
-这是必须先做的可控 benchmark，用来证明 failure taxonomy、watchdog、replay、scheduler 的有效性。
-
-- [ ] 新建目录：`benchmarks/failurebench/`
-- [ ] 固定 8 类 failure scenario：
-  - [ ] `agent_invalid_action`
-  - [ ] `tool_timeout`
-  - [ ] `tool_execution_error`
-  - [ ] `environment_crash`
-  - [ ] `environment_contamination`
-  - [ ] `context_limit`
-  - [ ] `repetitive_loop`
-  - [ ] `rate_limit`
-- [ ] 每类 100 个 deterministic seeds，共 800 episodes。
-- [ ] 固定 split：
-  - [ ] dev: 每类 20，共 160
-  - [ ] test: 每类 80，共 640
-- [ ] 每个 episode 输出：
-  - [ ] `trace.jsonl`
-  - [ ] `oracle_failure_type`
-  - [ ] `oracle_attribution`
-  - [ ] `oracle_replayability`
-  - [ ] `expected_salvageable`
-- [ ] 论文用途：
-  - [ ] failure detection precision/recall
-  - [ ] root-cause attribution accuracy
-  - [ ] replayability classification accuracy
-  - [ ] overhead measurement
-
-### 1.2 WebShop / AgentBench Web Shopping
-
-真实多轮工具/网页购物任务，用于证明 rollout data quality 和训练收益。
-
-- [ ] 数据源：WebShop / AgentBench WS task。
-- [ ] 固定任务：
-  - [ ] `webshop-env_train`
-  - [ ] `webshop-std`
-- [ ] 固定 split：
-  - [ ] train: 1,000 episodes
-  - [ ] dev: 200 episodes
-  - [ ] test: 500 episodes
-- [ ] 如果完整 WebShop 环境部署成本过高：
-  - [ ] 先使用 AgentBench FC/WebShop function-call 环境。
-  - [ ] 保留真实 WebShop full environment 作为扩展实验。
-- [ ] 主要 failure：
-  - [ ] invalid tool call
-  - [ ] repetitive search loop
-  - [ ] context overrun
-  - [ ] no-progress interaction
-  - [ ] delayed sparse reward
-- [ ] 论文用途：
-  - [ ] GRPO training curve
+- [x] synthetic useful/cost metric
+- [x] FIFO vs failure-aware scheduled FailureBench run
+- [ ] worker-pool throughput simulator:
+  - [ ] environment lease queue
+  - [ ] per-task service-time distribution
+  - [ ] zombie session modeling
+  - [ ] P50/P95/P99 rollout latency
   - [ ] useful trajectories/hour
-  - [ ] invalid action rate
-  - [ ] task success rate
+  - [ ] environment-hours/success
+- [ ] real MiniWoB++ throughput run on multiple browser workers
+- [ ] GPU/LLM server backpressure model for SGLang/vLLM rollout workers
 
-### 1.3 MiniWoB++ Browser Subset
+### 主线 D：Training Impact
 
-浏览器状态、重复动作、页面等待、DOM/action mismatch 的受控真实环境。
+目标：证明 RolloutOS 改善训练数据质量和 sample efficiency。
 
-- [ ] 数据源：MiniWoB++。
-- [ ] 固定 20 个任务：
-  - [ ] `click-button`
-  - [ ] `click-checkboxes`
-  - [ ] `click-checkboxes-large`
-  - [ ] `click-collapsible`
-  - [ ] `click-dialog`
-  - [ ] `click-link`
-  - [ ] `click-menu`
-  - [ ] `click-option`
-  - [ ] `click-pie`
-  - [ ] `enter-date`
-  - [ ] `enter-password`
-  - [ ] `enter-text`
-  - [ ] `focus-text`
-  - [ ] `login-user`
-  - [ ] `multi-layouts`
-  - [ ] `navigate-tree`
-  - [ ] `search-engine`
-  - [ ] `social-media`
-  - [ ] `use-autocomplete`
-  - [ ] `use-spinner`
-- [ ] 固定 seeds：
-  - [ ] train: seeds 0-999
-  - [ ] dev: seeds 1000-1199
-  - [ ] test: seeds 1200-1699
-- [ ] 每个 episode 最大 15 turns。
-- [ ] 主要 failure：
-  - [ ] repeated click loop
-  - [ ] stale DOM
+- [ ] OpenAI-compatible policy client
+- [ ] SGLang rollout client
+- [ ] vLLM rollout client
+- [ ] token-native trace export
+- [ ] lightweight GRPO prototype for smoke validation
+- [ ] connect to AgentRL/verl trainer for formal curves
+- [ ] WebShop/AgentBench WS training run:
+  - [ ] discard-failures baseline
+  - [ ] uniform negative failure baseline
+  - [ ] typed failure + salvage
+  - [ ] full RolloutOS
+
+## 2. 固定 Workloads
+
+### FailureBench
+
+- [x] 8 failure types:
+  - [x] `agent_invalid_action`
+  - [x] `tool_timeout`
+  - [x] `tool_execution_error`
+  - [x] `environment_crash`
+  - [x] `environment_contamination`
+  - [x] `context_limit`
+  - [x] `repetitive_loop`
+  - [x] `rate_limit`
+- [x] deterministic dev/test seed generation
+- [x] trace output
+- [x] oracle failure labels
+- [x] replayability labels
+- [x] baseline comparison
+- [ ] increase default paper run to 800 episodes when finalizing numbers
+- [ ] report storage/logging overhead
+
+### MiniWoB++ 20-task Subset
+
+- [x] Fixed task names:
+  - [x] `click-button`
+  - [x] `click-checkboxes`
+  - [x] `click-checkboxes-large`
+  - [x] `click-collapsible`
+  - [x] `click-dialog`
+  - [x] `click-link`
+  - [x] `click-menu`
+  - [x] `click-option`
+  - [x] `click-pie`
+  - [x] `enter-date`
+  - [x] `enter-password`
+  - [x] `enter-text`
+  - [x] `focus-text`
+  - [x] `login-user`
+  - [x] `multi-layouts`
+  - [x] `navigate-tree`
+  - [x] `search-engine`
+  - [x] `social-media`
+  - [x] `use-autocomplete`
+  - [x] `use-spinner`
+- [x] deterministic contract harness
+- [ ] live browser execution
+- [ ] fixed splits:
+  - [ ] train seeds 0-999
+  - [ ] dev seeds 1000-1199
+  - [ ] test seeds 1200-1699
+- [ ] max 15 turns per episode
+- [ ] benchmark failures:
+  - [x] stale DOM
+  - [x] invalid selector/action
+  - [x] no-progress
   - [ ] page timeout
-  - [ ] invalid selector/action
-  - [ ] no-progress
-- [ ] 论文用途：
-  - [ ] browser/runtime failure benchmark
-  - [ ] replay determinism levels
-  - [ ] environment reset/reuse experiments
+  - [ ] repeated click loop on live pages
 
-### 1.4 SWE-bench Verified Debug Subset
+### WebShop / AgentBench WS
 
-代码 agent 任务不作为第一阶段训练主任务，主要用于 replay/debugging 和环境生命周期实验。
+- [ ] choose exact environment source and pin version
+- [ ] function-call adapter
+- [ ] OpenAI-compatible agent loop
+- [ ] tool-call validation
+- [ ] trace export
+- [ ] dev baseline
+- [ ] GRPO integration
 
-- [ ] 数据源：SWE-bench Verified。
-- [ ] 固定 subset：
-  - [ ] dev-debug: 50 instances
-  - [ ] test-debug: 100 instances
-- [ ] subset 选择规则：
-  - [ ] 按 repository 分层采样。
-  - [ ] 排除需要超长上下文或极高资源的任务。
-  - [ ] 固定随机种子：`20260520`。
-- [ ] 每个 instance 最大预算：
-  - [ ] wall-clock: 20 min
-  - [ ] tool calls: 80
-  - [ ] shell command timeout: 60 sec
-- [ ] 主要 failure：
-  - [ ] shell timeout
-  - [ ] test command failure
-  - [ ] environment setup failure
-  - [ ] invalid patch
-  - [ ] repeated file inspection loop
-- [ ] 论文用途：
-  - [ ] replay/debugging benchmark
-  - [ ] environment snapshot/rollback cost
-  - [ ] failure attribution on realistic coding agents
+### SWE-bench Debug
 
-## 2. 固定 Baseline
+- [ ] fixed 50-instance dev-debug subset
+- [ ] shell tool wrapper
+- [ ] command timeout
+- [ ] stdout/stderr truncation
+- [ ] diff capture
+- [ ] replay/debug report
 
-所有实验至少跑以下 baseline。
+## 3. 固定 Metrics
 
-### 2.1 Runtime baseline
+### Failure Detection
 
-- [ ] `B0_raw_agent`
-  - 普通 agent loop。
-  - 无 typed failure。
-  - 无 event-sourced trace。
-  - fixed timeout。
-  - failed trajectory 直接丢弃。
-
-- [ ] `B1_capacity_scheduler`
-  - 按 worker capacity 调度。
-  - fixed timeout。
-  - message-only trace。
-
-- [ ] `B2_retry_only`
-  - capacity scheduler + simple retry。
-  - 不区分 failure type。
-
-- [ ] `B3_message_trace`
-  - 保存完整 messages 和 stdout/stderr。
-  - 无 token-native trace，无 typed event。
-
-### 2.2 Ours variants
-
-- [ ] `O1_failure_runtime`
-  - typed failure taxonomy。
-  - watchdog。
-  - loop/no-progress detection。
-
-- [ ] `O2_failure_runtime_salvage`
-  - O1 + partial trajectory salvage。
-
-- [ ] `O3_replayable_trace`
-  - O2 + event-sourced trace。
-  - exact/model-substituted/environment-substituted replay report。
-
-- [ ] `O4_failure_scheduler`
-  - O3 + failure-aware scheduler。
-
-- [ ] `O5_full`
-  - O4 + token-native validation。
-  - scheduler 使用 failure rate、cost、policy lag、reward variance。
-
-## 3. 固定指标
-
-### 3.1 Failure detection
-
-- [ ] detection precision
-- [ ] detection recall
-- [ ] macro F1 by failure type
+- [x] detection accuracy
+- [x] macro F1
+- [x] per-failure precision/recall/F1
+- [x] turns wasted after oracle failure
 - [ ] false positive rate
 - [ ] mean time to detection
-- [ ] turns wasted after oracle failure point
 
-### 3.2 Rollout system
+### Rollout System
 
-- [ ] completed trajectories/hour
-- [ ] useful trajectories/hour
+- [x] useful trajectories/cost unit
+- [x] failed rollout cost units
+- [x] replayable failure rate
+- [ ] useful trajectories/hour with real workers
 - [ ] successful trajectories/hour
-- [ ] failed rollout cost
 - [ ] environment-hours/success
 - [ ] zombie session rate
 - [ ] P50/P95/P99 rollout latency
-- [ ] GPU idle time caused by rollout bottleneck
-- [ ] logging overhead
+- [ ] GPU idle/backpressure time
 - [ ] storage overhead per trajectory
 
-### 3.3 Training
+### Replay / Debugging
 
-- [ ] reward curve
-- [ ] success rate
-- [ ] sample efficiency measured by environment-hours
-- [ ] sample efficiency measured by rollout tokens
-- [ ] invalid action rate
-- [ ] tool error rate
-- [ ] context-limit failure rate
-- [ ] average turns to success
-- [ ] seed variance across 3 seeds
+- [x] event-log validation
+- [x] deterministic replay match/mismatch
+- [x] batch replay report
+- [ ] replay determinism distribution on MiniWoB++
+- [ ] root-cause attribution accuracy on real failures
+- [ ] time-to-root-cause human or oracle-assisted study
 
-### 3.4 Replay/debugging
+### Environment Lifecycle
 
-- [ ] replay success rate
-- [ ] determinism level distribution
-- [ ] root-cause attribution accuracy
-- [ ] trajectory diff accuracy
-- [ ] percentage of failures with actionable diagnosis
-- [ ] time-to-root-cause
-
-### 3.5 Environment lifecycle
-
-- [ ] reset latency
-- [ ] contamination rate
-- [ ] reuse success rate
+- [x] reset count
+- [x] restore count
+- [x] reuse count
+- [x] contamination-induced failures
+- [x] cost per successful trajectory
+- [ ] real browser reset latency
+- [ ] real browser contamination rate
 - [ ] environment utilization
-- [ ] failed rollout due to bad state
-- [ ] cost per successful trajectory
 
-## 4. 固定主实验
+## 4. 近期执行计划
 
-### Experiment 1: FailureBench controllable failure benchmark
+### P0：把 MiniWoB++ 从 contract 推到 live browser
 
-目的：证明 failure taxonomy 和 runtime detector 有效。
+- [ ] Decide and pin live environment package.
+- [ ] Add optional dependency group for browser workload.
+- [ ] Add live `MiniWoBEnvironmentAdapter`.
+- [ ] Keep the current deterministic contract as CI and replay oracle.
+- [ ] Add live smoke test gated by environment availability.
+- [ ] Run 20-task dev subset with oracle or scripted policy.
 
-- [ ] 实现 `benchmarks/failurebench`。
-- [ ] 运行模型：
-  - [ ] Qwen3-4B smoke
-  - [ ] Qwen3-8B main
-  - [ ] Llama-3.1-8B cross-model
-- [ ] 对比：
-  - [ ] B0_raw_agent
-  - [ ] B1_capacity_scheduler
-  - [ ] O1_failure_runtime
-  - [ ] O3_replayable_trace
-- [ ] 报告表：
-  - [ ] per-failure precision/recall/F1
-  - [ ] mean time to detection
-  - [ ] turns wasted after oracle failure
-  - [ ] trace overhead
-- [ ] 通过标准：
-  - [ ] macro F1 >= 0.85 on synthetic test
-  - [ ] false positive rate <= 5%
+### P1：补齐系统指标
 
-### Experiment 2: Useful rollout throughput
+- [ ] Add latency percentile helpers.
+- [ ] Add trace byte-size and event-count overhead.
+- [ ] Add environment lease utilization metrics.
+- [ ] Add zombie session definition and measurement.
 
-目的：证明我们的系统提高 useful trajectories/hour，而不只是 raw throughput。
+### P2：实验自动化和论文闭环
 
-- [ ] 任务：
-  - [ ] FailureBench test
-  - [ ] MiniWoB++ 20-task subset
-  - [ ] WebShop dev
-- [ ] 模型：
-  - [ ] Qwen3-8B
-- [ ] 对比：
-  - [ ] B1_capacity_scheduler
-  - [ ] B2_retry_only
-  - [ ] O2_failure_runtime_salvage
-  - [ ] O4_failure_scheduler
-  - [ ] O5_full
-- [ ] 报告：
-  - [ ] useful trajectories/hour
-  - [ ] successful trajectories/hour
-  - [ ] failed rollout cost
-  - [ ] environment-hours/success
-  - [ ] zombie session rate
-  - [ ] P95/P99 latency
-- [ ] 通过标准：
-  - [ ] useful trajectories/hour 相比 B1 提升 >= 20%
-  - [ ] zombie session rate 相比 B1 降低 >= 50%
+- [ ] Add `experiments/configs/exp1_failurebench_detection.json`.
+- [ ] Add `experiments/configs/exp2_minwob_lifecycle.json`.
+- [ ] Add `experiments/configs/exp3_throughput.json`.
+- [ ] Add paper table generation for MiniWoB++ contract/live runs.
+- [ ] Replace synthetic-only claims in `paper/main.tex` with real workload methodology.
 
-### Experiment 3: Agent RL training on WebShop/AgentBench WS
+## 5. 投稿差距
 
-目的：证明 infra 改进影响训练效率。
+当前距离 MLSys Oral 的主要差距不是代码 skeleton，而是证据强度：
 
-- [ ] 任务：
-  - [ ] `webshop-env_train`: 1,000 train episodes
-  - [ ] `webshop-std`: 500 test episodes
-- [ ] 模型：
-  - [ ] Qwen3-8B
-- [ ] 算法：
-  - [ ] GRPO
-- [ ] 训练配置：
-  - [ ] rollout group size `n=8`
-  - [ ] max turns `20`
-  - [ ] max total length `8192`
-  - [ ] temperature `0.8`
-  - [ ] learning rate `1e-6`
-  - [ ] seeds: 3 seeds (`1`, `2`, `3`)
-- [ ] 对比：
-  - [ ] discard all failures
-  - [ ] uniform negative reward for all failures
-  - [ ] O2 typed failure + salvage
-  - [ ] O5 full
-- [ ] 报告：
-  - [ ] success rate vs environment-hours
-  - [ ] reward vs rollout tokens
-  - [ ] invalid action rate
-  - [ ] tool error rate
-  - [ ] context-limit rate
-  - [ ] seed variance
-- [ ] 通过标准：
-  - [ ] O5 在相同 environment-hours 下达到更高 success rate。
-  - [ ] O5 在最终 success rate 上不低于 baseline，且显著减少 invalid/tool failures。
-
-### Experiment 4: Replay/debugging benchmark
-
-目的：证明 replayable event trace 比 raw logs/message trace 更适合定位失败。
-
-- [ ] 数据：
-  - [ ] FailureBench test: 640 traces
-  - [ ] MiniWoB++ failed traces: at least 300
-  - [ ] SWE-bench Verified dev-debug failed traces: at least 50
-- [ ] 对比日志格式：
-  - [ ] raw stdout/stderr
-  - [ ] message-only trace
-  - [ ] event-sourced trace
-- [ ] 自动评估：
-  - [ ] 使用 oracle labels 计算 attribution accuracy。
-  - [ ] 使用 deterministic replay 判断 replay success。
-- [ ] 人类评估（可选但强烈建议）：
-  - [ ] 3-5 名参与者。
-  - [ ] 每人 30 个 failure cases。
-  - [ ] 测 time-to-root-cause 和 diagnosis accuracy。
-- [ ] 报告：
-  - [ ] root-cause attribution accuracy
-  - [ ] replay success rate
-  - [ ] time-to-root-cause
-  - [ ] actionable diagnosis rate
-- [ ] 通过标准：
-  - [ ] event-sourced trace attribution accuracy 高于 message-only >= 20 个百分点。
-
-### Experiment 5: Environment lifecycle and contamination
-
-目的：证明 agent environment 需要 snapshot/reuse/contamination-aware 管理。
-
-- [ ] 任务：
-  - [ ] MiniWoB++ browser subset
-  - [ ] SWE-bench Verified dev-debug
-  - [ ] synthetic mutable DB/file task
-- [ ] 对比：
-  - [ ] recreate every episode
-  - [ ] blind reuse
-  - [ ] fixed TTL reuse
-  - [ ] health-check reuse
-  - [ ] contamination-aware reuse
-- [ ] 报告：
-  - [ ] reset latency
-  - [ ] contamination rate
-  - [ ] environment utilization
-  - [ ] failed rollout due to bad state
-  - [ ] cost per successful trajectory
-- [ ] 通过标准：
-  - [ ] 相比 recreate every episode 降低环境成本。
-  - [ ] 相比 blind reuse 显著降低 contamination-induced failure。
-
-## 5. 必做消融
-
-- [ ] 去掉 taxonomy：所有 failure 都映射到 `unknown_runtime_error`。
-- [ ] 去掉 salvage：所有 failed trajectories 丢弃。
-- [ ] 去掉 scheduler：使用 capacity-only。
-- [ ] 去掉 token-native validation：只存 message trace，训练时重新 tokenize。
-- [ ] 去掉 replay metadata：只保留 event text，不保存 model/tool/env provenance。
-
-每个消融至少在：
-
-- [ ] FailureBench test
-- [ ] WebShop dev
-- [ ] MiniWoB++ subset
-
-上跑。
-
-## 6. 实现路线
-
-### Phase A: 本项目 primitives 到 runnable demo
-
-- [ ] 新增 `benchmarks/failurebench/`。
-- [ ] 新增 `agentrl_infra.runner`：
-  - [ ] episode runner
-  - [ ] tool runtime wrapper
-  - [ ] timeout wrapper
-  - [ ] event sink
-- [ ] 新增 CLI：
-  - [ ] `agentrl-infra run-failurebench`
-  - [ ] `agentrl-infra inspect-trace`
-  - [ ] `agentrl-infra replay-trace`
-  - [ ] `agentrl-infra summarize-runs`
-- [ ] 新增输出规范：
-  - [ ] `runs/{run_id}/config.yaml`
-  - [ ] `runs/{run_id}/traces/*.jsonl`
-  - [ ] `runs/{run_id}/metrics.json`
-  - [ ] `runs/{run_id}/summary.md`
-
-### Phase B: MiniWoB++ 接入
-
-- [ ] 创建 `integrations/miniwob/`。
-- [ ] 封装 browser action schema。
-- [ ] 封装 observation extractor。
-- [ ] 实现 loop/no-progress detector。
-- [ ] 实现 environment reset health check。
-- [ ] 跑 20-task subset baseline。
-
-### Phase C: WebShop / AgentBench WS 接入
-
-- [ ] 创建 `integrations/webshop/` 或 `integrations/agentbench_ws/`。
-- [ ] 支持 OpenAI-compatible agent loop。
-- [ ] 支持 tool-call validation。
-- [ ] 导出 token-native trajectory。
-- [ ] 跑 WebShop dev baseline。
-- [ ] 接 GRPO 训练。
-
-### Phase D: SWE-bench Debug 接入
-
-- [ ] 创建 `integrations/swebench_debug/`。
-- [ ] 固定 50 dev-debug subset。
-- [ ] 封装 shell tool：
-  - [ ] command timeout
-  - [ ] stdout/stderr truncation
-  - [ ] file diff capture
-  - [ ] test command capture
-- [ ] 实现 replay/debug report。
-
-### Phase E: 论文实验自动化
-
-- [ ] 新增 `experiments/configs/`。
-- [ ] 每个实验一个 YAML：
-  - [ ] `exp1_failurebench_detection.yaml`
-  - [ ] `exp2_useful_throughput.yaml`
-  - [ ] `exp3_webshop_grpo.yaml`
-  - [ ] `exp4_replay_debugging.yaml`
-  - [ ] `exp5_env_lifecycle.yaml`
-- [ ] 新增 `scripts/run_experiment.py`。
-- [ ] 新增 `scripts/make_tables.py`。
-- [ ] 新增 `scripts/make_figures.py`。
-- [ ] 所有表格输出 LaTeX：
-  - [ ] `paper/tables/*.tex`
-- [ ] 所有图输出 PDF/PNG：
-  - [ ] `paper/figures/*`
-
-## 7. 论文图表固定计划
-
-### Main paper figures
-
-- [ ] Figure 1: 系统架构图。
-- [ ] Figure 2: event-sourced trajectory schema。
-- [ ] Figure 3: useful trajectories/hour 对比。
-- [ ] Figure 4: WebShop GRPO training curve。
-- [ ] Figure 5: replay root-cause accuracy / time-to-debug。
-
-### Main paper tables
-
-- [ ] Table 1: failure taxonomy and semantics。
-- [ ] Table 2: FailureBench detection results。
-- [ ] Table 3: rollout throughput and cost。
-- [ ] Table 4: ablation study。
-- [ ] Table 5: environment lifecycle results。
-
-### Appendix
-
-- [ ] 全部任务和 seeds。
-- [ ] 模型超参。
-- [ ] scheduler 公式。
-- [ ] failure detector 阈值。
-- [ ] replay determinism levels。
-- [ ] 更多 per-task MiniWoB++ 结果。
-- [ ] SWE-bench debug case studies。
-
-## 8. 当前最近三周执行计划
-
-### Week 1
-
-- [ ] 实现 FailureBench。
-- [ ] 实现 runner/event sink。
-- [ ] 实现 summary metrics。
-- [ ] 跑 Qwen3-4B smoke 或 mock policy。
-- [ ] 生成第一批 traces。
-
-### Week 2
-
-- [ ] 接 Qwen3-8B OpenAI-compatible inference。
-- [ ] 跑 FailureBench dev/test。
-- [ ] 做 detection precision/recall 表。
-- [ ] 实现 replay CLI。
-- [ ] 写 2 个 case study。
-
-### Week 3
-
-- [ ] 接 MiniWoB++ 5-task pilot。
-- [ ] 实现 browser loop/no-progress detector。
-- [ ] 跑 capacity baseline vs O1/O3。
-- [ ] 输出 useful trajectories/hour 初版图。
-- [ ] 根据结果调整 failure detector 阈值。
-
-## 9. 外部资料固定引用
-
-- AgentRL: https://arxiv.org/abs/2510.04206
-- AgentBench: https://arxiv.org/abs/2308.03688
-- SWE-bench datasets: https://www.swebench.com/SWE-bench/guides/datasets/
-- Qwen3-8B model card: https://huggingface.co/Qwen/Qwen3-8B
-- Qwen2.5-7B-Instruct model card: https://huggingface.co/Qwen/Qwen2.5-7B-Instruct
-- Llama-3.1-8B-Instruct model card: https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct
-- MiniWoB++ release: https://github.com/Farama-Foundation/miniwob-plusplus
-- WebShop: https://github.com/princeton-nlp/WebShop
+- [ ] 需要至少一个真实环境的大规模系统实验，MiniWoB++ 是第一优先级。
+- [ ] 需要 throughput/latency/utilization 结果，而不只是 failure classification。
+- [ ] 需要训练曲线或至少 rollout-data-quality 对训练输入的量化影响。
+- [ ] 需要更强的 related work 和 architecture figure。
+- [ ] 需要把所有实验配置、依赖和 artifact validation 做到一键复现。
 

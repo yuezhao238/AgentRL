@@ -21,6 +21,7 @@ from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
 from .compare import compare_metric_files
 from .events import EventLog
 from .experiments import ExperimentSuiteConfig, load_experiment_suite_config, run_experiment_suite
+from .integrations.miniwob import MINIWOB_20_TASKS, run_miniwob_contract_subset
 from .metrics import load_metrics, save_metrics, summarize_metrics
 from .replay import ReplayEngine, ReplayMode, ReplayReport, validate_event_log
 
@@ -48,6 +49,10 @@ EXPERIMENT_OUTPUT_DIR_OPTION = typer.Option(
 )
 SUITE_ID_OPTION = typer.Option("local-suite", help="Suite identifier.")
 SUITE_CONFIG_PATH_OPTION = typer.Option(None, help="Optional JSON suite config.")
+MINIWOB_OUTPUT_DIR_OPTION = typer.Option(
+    Path("runs/miniwob"),
+    help="Directory for MiniWoB contract run outputs.",
+)
 
 
 @app.command()
@@ -230,3 +235,30 @@ def run_experiment_suite_cmd(
         )
     report = run_experiment_suite(config)
     typer.echo(report.model_dump_json(indent=2))
+
+
+@app.command("run-miniwob-contract")
+def run_miniwob_contract_cmd(
+    output_dir: Path = MINIWOB_OUTPUT_DIR_OPTION,
+    run_id: str | None = RUN_ID_OPTION,
+    tasks: str = typer.Option(
+        "click-button,enter-text,login-user",
+        help="Comma-separated MiniWoB tasks, or all.",
+    ),
+    seeds: str = typer.Option("1000", help="Comma-separated integer seeds."),
+    policy: str = typer.Option("oracle", help="Policy: oracle or repeated_action."),
+) -> None:
+    """Run the deterministic MiniWoB browser contract harness."""
+    run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    task_names = (
+        list(MINIWOB_20_TASKS) if tasks == "all" else [item for item in tasks.split(",") if item]
+    )
+    seed_values = [int(item) for item in seeds.split(",") if item]
+    _, summary = run_miniwob_contract_subset(
+        output_dir=output_dir,
+        run_id=run_id,
+        task_names=task_names,
+        seeds=seed_values,
+        policy_name=policy,
+    )
+    typer.echo(summary.model_dump_json(indent=2))

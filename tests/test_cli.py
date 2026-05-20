@@ -28,3 +28,27 @@ def test_run_failurebench_cli_smoke(tmp_path) -> None:
     assert result.exit_code == 0
     assert (tmp_path / "smoke" / "metrics.json").exists()
     assert (tmp_path / "smoke" / "summary.json").exists()
+
+
+def test_run_miniwob_contract_cli_smoke(tmp_path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "run-miniwob-contract",
+            "--output-dir",
+            str(tmp_path),
+            "--run-id",
+            "smoke",
+            "--tasks",
+            "click-button,enter-text",
+            "--seeds",
+            "1000,1001",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "smoke" / "metrics.json").exists()
+    assert (tmp_path / "smoke" / "summary.json").exists()
+    assert len(list((tmp_path / "smoke" / "traces").glob("*.jsonl"))) == 4

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from .failures import FailureRecord
 from .runner import StepResult
@@ -50,6 +50,7 @@ class ToolResult:
         )
 
 
+@runtime_checkable
 class EnvironmentAdapter(Protocol):
     environment_id: str
 

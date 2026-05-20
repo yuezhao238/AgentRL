@@ -108,6 +108,17 @@ uv run agentrl-infra run-lifecycle-bench --policy blind_reuse
 uv run agentrl-infra run-lifecycle-bench --policy contamination_aware
 ```
 
+Run the deterministic MiniWoB browser contract harness:
+
+```bash
+uv run agentrl-infra run-miniwob-contract --tasks click-button,enter-text --seeds 1000,1001
+uv run agentrl-infra run-miniwob-contract --tasks all --policy repeated_action
+```
+
+The contract harness fixes the browser action schema, DOM hash observation format,
+stale-DOM checks, no-progress watchdog behavior, and contamination/health checks before
+binding the same interface to a live MiniWoB++ browser environment.
+
 Run the local experiment suite and generate paper-ready CSV/LaTeX tables:
 
 ```bash
