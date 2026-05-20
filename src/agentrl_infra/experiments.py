@@ -15,7 +15,14 @@ from .baselines import RuntimeBaseline, evaluate_failurebench_baseline
 from .benchmarks.failurebench import run_failurebench_scheduled
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
 from .metrics import save_metrics
-from .tables import build_summary_rows, write_summary_csv, write_summary_latex
+from .tables import (
+    build_lifecycle_rows,
+    build_summary_rows,
+    write_lifecycle_csv,
+    write_lifecycle_latex,
+    write_summary_csv,
+    write_summary_latex,
+)
 
 
 class ExperimentSuiteConfig(BaseModel):
@@ -110,6 +117,14 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     write_summary_csv(rows, csv_path)
     write_summary_latex(rows, tex_path)
 
+    lifecycle_rows = build_lifecycle_rows(
+        {name: Path(path) for name, path in lifecycle_runs.items()}
+    )
+    lifecycle_csv_path = table_dir / "lifecycle_summary.csv"
+    lifecycle_tex_path = table_dir / "lifecycle_summary.tex"
+    write_lifecycle_csv(lifecycle_rows, lifecycle_csv_path)
+    write_lifecycle_latex(lifecycle_rows, lifecycle_tex_path)
+
     report = ExperimentSuiteReport(
         suite_dir=str(suite_dir),
         failurebench_runs=failurebench_runs,
@@ -117,6 +132,8 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
         tables={
             "failurebench_summary_csv": str(csv_path),
             "failurebench_summary_tex": str(tex_path),
+            "lifecycle_summary_csv": str(lifecycle_csv_path),
+            "lifecycle_summary_tex": str(lifecycle_tex_path),
         },
     )
     (suite_dir / "suite_report.json").write_text(

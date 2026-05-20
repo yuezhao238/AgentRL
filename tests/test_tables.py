@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from agentrl_infra.tables import TableRow, render_summary_latex, write_summary_csv
+from agentrl_infra.tables import (
+    LifecycleTableRow,
+    TableRow,
+    render_lifecycle_latex,
+    render_summary_latex,
+    write_summary_csv,
+)
 
 
 def test_render_summary_latex_escapes_names() -> None:
@@ -31,3 +37,24 @@ def test_write_summary_csv(tmp_path) -> None:
 
     assert path.exists()
     assert "name" in path.read_text(encoding="utf-8")
+
+
+def test_render_lifecycle_latex() -> None:
+    latex = render_lifecycle_latex(
+        [
+            LifecycleTableRow(
+                policy="blind_reuse",
+                episodes=5,
+                successes=1,
+                resets=1,
+                restores=0,
+                reuses=4,
+                contamination_failures=4,
+                total_cost_units=1.5,
+                cost_per_success=1.5,
+            )
+        ]
+    )
+
+    assert "blind\\_reuse" in latex
+    assert "Contam. Fail" in latex

@@ -321,6 +321,27 @@ in deterministic synthetic resource units, not wall-clock time.}
 \label{tab:failurebench-results}
 \end{table}
 
+\subsection{Environment Lifecycle Results}
+
+Table~\ref{tab:lifecycle-results} reports a synthetic mutable-environment
+lifecycle benchmark. Recreating an environment for every episode avoids
+contamination but pays the full reset cost each time. Blind reuse has low reset
+cost but allows dirty state to leak into subsequent episodes. The
+contamination-aware policy restores from a clean snapshot when a health check
+detects dirty state, preserving all successful episodes while reducing
+cost-per-success relative to full recreation.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\input{tables/lifecycle_summary.tex}
+}
+\caption{Synthetic environment lifecycle benchmark. Cost is measured in
+deterministic reset/restore/step units.}
+\label{tab:lifecycle-results}
+\end{table}
+
 \begin{table}[t]
 \centering
 \resizebox{\linewidth}{!}{%
