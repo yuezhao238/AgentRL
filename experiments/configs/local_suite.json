@@ -35,5 +35,10 @@
     "wait_loop",
     "repeated_action"
   ],
-  "throughput_workers": 8
+  "throughput_workers": 8,
+  "model_provenance_model_ids": [
+    "Qwen/Qwen3-4B",
+    "Qwen/Qwen3-8B",
+    "meta-llama/Llama-3.1-8B-Instruct"
+  ]
 }

@@ -91,6 +91,11 @@ agent RL rollouts.
     - [x] FIFO：1750.5 useful/hr, 1289.0 failed cost, 7.1% zombie rate, P95 latency 36.0
     - [x] retry-only：1581.8 useful/hr, 1561.0 failed cost, 7.1% zombie rate, P95 latency 24.0
     - [x] failure-aware：8037.2 useful/hr, 307.0 failed cost, 0% zombie rate, P95 latency 6.0
+- [x] Real model tokenizer provenance audit：
+  - [x] Qwen/Qwen3-4B：mean 20.0 prompt tokens, max 23, drift 3/3
+  - [x] Qwen/Qwen3-8B：mean 20.0 prompt tokens, max 23, drift 3/3
+  - [x] meta-llama/Llama-3.1-8B-Instruct：mean 46.7 prompt tokens, max 50, drift 3/3
+  - [x] token-native JSONL traces include `model_version`, `tokenizer_hash`, `token_ids`, `loss_mask`
 
 ## 1. MLSys 主线
 
@@ -104,12 +109,12 @@ agent RL rollouts.
 - [x] Replay validates event-log structure and deterministic executable replay.
 - [x] Scheduler uses failure-aware priority and cancellation semantics.
 - [ ] Add resource accounting for wall-clock, CPU, GPU, browser, and storage overhead.
-- [ ] Add token-native trajectory fields for real model rollouts:
-  - [ ] `input_ids`
-  - [ ] `logprobs`
-  - [ ] `loss_mask`
-  - [ ] `model_version`
-  - [ ] `tokenizer_hash`
+- [x] Add token-native trajectory fields for real tokenizer/model provenance:
+  - [x] `token_ids`
+  - [x] `loss_mask`
+  - [x] `model_version`
+  - [x] `tokenizer_hash`
+- [ ] Add generation-time `logprobs` from SGLang/vLLM rollout workers.
 
 ### 主线 B：Realistic Environment Evidence
 
@@ -163,7 +168,8 @@ agent RL rollouts.
 - [ ] OpenAI-compatible policy client
 - [ ] SGLang rollout client
 - [ ] vLLM rollout client
-- [ ] token-native trace export
+- [x] tokenizer-level token-native trace export
+- [ ] generation-level token-native trace export with logprobs
 - [ ] lightweight GRPO prototype for smoke validation
 - [ ] connect to AgentRL/verl trainer for formal curves
 - [ ] WebShop/AgentBench WS training run:

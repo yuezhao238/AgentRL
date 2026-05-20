@@ -342,6 +342,37 @@ deterministic reset/restore/step units.}
 \label{tab:lifecycle-results}
 \end{table}
 
+\subsection{Model Provenance and Token Drift Results}
+
+Table~\ref{tab:model-provenance-results} reports a local tokenizer provenance
+audit over three cached open-weight instruction models. The audit does not yet
+measure model generation quality; instead, it validates the token-native trace
+path required by Agent RL training export. For each model, the runtime loads the
+local Hugging Face tokenizer, hashes the tokenizer and chat template, renders
+three agent prompts with the model's chat template, records exact token IDs and
+loss masks into event traces, and checks whether decode/re-encode round trips
+preserve token IDs.
+
+The Qwen3-4B and Qwen3-8B checkpoints share the same tokenizer fingerprint and
+produce identical prompt token counts. Llama-3.1-8B-Instruct uses a different
+chat template and tokenizer, producing 46.7 mean prompt tokens on the same
+prompts versus 20.0 for Qwen3. All three models pass the drift validator on all
+audited prompts. This result closes the first model-facing systems requirement:
+rollout traces can now carry real model version, tokenizer hash, token IDs, and
+loss masks rather than only message text.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\input{tables/model_provenance_summary.tex}
+}
+\caption{Tokenizer provenance and token-drift audit using locally cached
+open-weight models. Drift Valid counts prompts whose decode/re-encode pass
+preserves the recorded token IDs.}
+\label{tab:model-provenance-results}
+\end{table}
+
 \subsection{Worker-Pool Throughput Results}
 
 Table~\ref{tab:throughput-results} reports a deterministic worker-pool

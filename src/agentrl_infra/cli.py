@@ -18,6 +18,7 @@ from .benchmarks.failurebench import (
     run_failurebench_scheduled,
 )
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.model_provenance import DEFAULT_MODEL_IDS, run_model_provenance_audit
 from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
 from .compare import compare_metric_files
 from .events import EventLog
@@ -50,6 +51,10 @@ THROUGHPUT_OUTPUT_DIR_OPTION = typer.Option(
 )
 THROUGHPUT_WORKERS_OPTION = typer.Option(8, help="Number of simulated rollout workers.")
 THROUGHPUT_POLICY_OPTION = typer.Option(ThroughputPolicy.FAILURE_AWARE, help="Policy.")
+MODEL_OUTPUT_DIR_OPTION = typer.Option(
+    Path("runs/model_provenance"),
+    help="Directory for model provenance audit outputs.",
+)
 EXPERIMENT_OUTPUT_DIR_OPTION = typer.Option(
     Path("runs/experiments"),
     help="Suite output root.",
@@ -227,6 +232,26 @@ def run_throughput_bench(
         run_id=run_id,
     )
     typer.echo(run.summary.model_dump_json(indent=2))
+
+
+@app.command("run-model-provenance")
+def run_model_provenance(
+    output_dir: Path = MODEL_OUTPUT_DIR_OPTION,
+    run_id: str | None = RUN_ID_OPTION,
+    models: str = typer.Option(
+        ",".join(DEFAULT_MODEL_IDS),
+        help="Comma-separated Hugging Face model ids.",
+    ),
+) -> None:
+    """Audit local tokenizer provenance and token-native trace metadata."""
+    run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    model_ids = [item for item in models.split(",") if item]
+    summaries = run_model_provenance_audit(
+        output_dir=output_dir,
+        run_id=run_id,
+        model_ids=model_ids,
+    )
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in summaries], indent=2))
 
 
 @app.command("compare-runs")

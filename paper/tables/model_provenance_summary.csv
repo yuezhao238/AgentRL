@@ -1,0 +1,4 @@
+model_id,tokenizer_class,vocab_size,prompt_count,mean_prompt_tokens,max_prompt_tokens,drift_validated,load_seconds,tokenizer_hash_prefix
+Qwen/Qwen3-4B,Qwen2TokenizerFast,151669,3,20.0,23,3/3,0.7031349521130323,83dbc5477e4c
+Qwen/Qwen3-8B,Qwen2TokenizerFast,151669,3,20.0,23,3/3,0.5591751225292683,83dbc5477e4c
+meta-llama/Llama-3.1-8B-Instruct,PreTrainedTokenizerFast,128256,3,46.666666666666664,50,3/3,0.5512736309319735,97dab1a4e261

@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .benchmarks.lifecycle import LifecycleSummary
+from .benchmarks.model_provenance import ModelProvenanceSummary
 from .benchmarks.throughput import ThroughputSummary
 from .integrations.miniwob import MiniWoBRunSummary
 from .metrics import RunSummary, load_metrics, summarize_metrics
@@ -64,6 +65,18 @@ class ThroughputTableRow(BaseModel):
     zombie_rate: float
     p95_latency_units: float
     utilization: float
+
+
+class ModelProvenanceTableRow(BaseModel):
+    model_id: str
+    tokenizer_class: str
+    vocab_size: int
+    prompt_count: int
+    mean_prompt_tokens: float
+    max_prompt_tokens: int
+    drift_validated: str
+    load_seconds: float
+    tokenizer_hash_prefix: str
 
 
 def build_summary_rows(inputs: dict[str, Path]) -> list[TableRow]:
@@ -219,6 +232,43 @@ def write_throughput_latex(rows: list[ThroughputTableRow], path: Path) -> None:
     path.write_text(render_throughput_latex(rows), encoding="utf-8")
 
 
+def build_model_provenance_rows(path: Path) -> list[ModelProvenanceTableRow]:
+    summaries = [
+        ModelProvenanceSummary.model_validate(item)
+        for item in json.loads(path.read_text(encoding="utf-8"))
+    ]
+    rows: list[ModelProvenanceTableRow] = []
+    for summary in summaries:
+        rows.append(
+            ModelProvenanceTableRow(
+                model_id=summary.model_id,
+                tokenizer_class=summary.tokenizer_class,
+                vocab_size=summary.vocab_size,
+                prompt_count=summary.prompt_count,
+                mean_prompt_tokens=summary.mean_prompt_tokens,
+                max_prompt_tokens=summary.max_prompt_tokens,
+                drift_validated=f"{summary.drift_validated_count}/{summary.prompt_count}",
+                load_seconds=summary.load_seconds,
+                tokenizer_hash_prefix=summary.tokenizer_hash[:12],
+            )
+        )
+    return rows
+
+
+def write_model_provenance_csv(rows: list[ModelProvenanceTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(ModelProvenanceTableRow.model_fields))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.model_dump())
+
+
+def write_model_provenance_latex(rows: list[ModelProvenanceTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_model_provenance_latex(rows), encoding="utf-8")
+
+
 def render_summary_latex(rows: list[TableRow]) -> str:
     lines = [
         "\\begin{tabular}{lrrrrrrr}",
@@ -293,5 +343,26 @@ def render_throughput_latex(rows: list[ThroughputTableRow]) -> str:
     return "\n".join(lines)
 
 
+def render_model_provenance_latex(rows: list[ModelProvenanceTableRow]) -> str:
+    lines = [
+        "\\begin{tabular}{lrrrrr}",
+        "\\toprule",
+        "Model & Vocab & Prompts & Mean Tok. & Max Tok. & Drift Valid \\\\",
+        "\\midrule",
+    ]
+    for row in rows:
+        lines.append(
+            f"{_escape_latex(_short_model_id(row.model_id))} & {row.vocab_size} & "
+            f"{row.prompt_count} & {row.mean_prompt_tokens:.1f} & "
+            f"{row.max_prompt_tokens} & {row.drift_validated} \\\\"
+        )
+    lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    return "\n".join(lines)
+
+
 def _escape_latex(value: str) -> str:
     return value.replace("_", "\\_")
+
+
+def _short_model_id(value: str) -> str:
+    return value.split("/")[-1]

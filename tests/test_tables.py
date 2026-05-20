@@ -3,10 +3,12 @@ from __future__ import annotations
 from agentrl_infra.tables import (
     LifecycleTableRow,
     MiniWoBContractTableRow,
+    ModelProvenanceTableRow,
     TableRow,
     ThroughputTableRow,
     render_lifecycle_latex,
     render_miniwob_contract_latex,
+    render_model_provenance_latex,
     render_summary_latex,
     render_throughput_latex,
     write_summary_csv,
@@ -106,3 +108,24 @@ def test_render_throughput_latex() -> None:
 
     assert "failure\\_aware" in latex
     assert "Useful/hr" in latex
+
+
+def test_render_model_provenance_latex() -> None:
+    latex = render_model_provenance_latex(
+        [
+            ModelProvenanceTableRow(
+                model_id="Qwen/Qwen3-4B",
+                tokenizer_class="Qwen2TokenizerFast",
+                vocab_size=151936,
+                prompt_count=3,
+                mean_prompt_tokens=18.0,
+                max_prompt_tokens=24,
+                drift_validated="3/3",
+                load_seconds=0.5,
+                tokenizer_hash_prefix="abc123",
+            )
+        ]
+    )
+
+    assert "Qwen3-4B" in latex
+    assert "Drift Valid" in latex

@@ -14,18 +14,22 @@ from .artifacts import (
 from .baselines import RuntimeBaseline, evaluate_failurebench_baseline
 from .benchmarks.failurebench import run_failurebench_scheduled
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.model_provenance import DEFAULT_MODEL_IDS, run_model_provenance_audit
 from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
 from .integrations.miniwob import MINIWOB_20_TASKS, run_miniwob_contract_subset
 from .metrics import save_metrics
 from .tables import (
     build_lifecycle_rows,
     build_miniwob_contract_rows,
+    build_model_provenance_rows,
     build_summary_rows,
     build_throughput_rows,
     write_lifecycle_csv,
     write_lifecycle_latex,
     write_miniwob_contract_csv,
     write_miniwob_contract_latex,
+    write_model_provenance_csv,
+    write_model_provenance_latex,
     write_summary_csv,
     write_summary_latex,
     write_throughput_csv,
@@ -52,6 +56,7 @@ class ExperimentSuiteConfig(BaseModel):
         ]
     )
     throughput_workers: int = 8
+    model_provenance_model_ids: list[str] = Field(default_factory=lambda: list(DEFAULT_MODEL_IDS))
 
 
 class ExperimentSuiteReport(BaseModel):
@@ -60,6 +65,7 @@ class ExperimentSuiteReport(BaseModel):
     lifecycle_runs: dict[str, str] = Field(default_factory=dict)
     miniwob_runs: dict[str, str] = Field(default_factory=dict)
     throughput_runs: dict[str, str] = Field(default_factory=dict)
+    model_provenance_run: str | None = None
     tables: dict[str, str] = Field(default_factory=dict)
 
 
@@ -157,6 +163,16 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
             throughput_dir / policy.value / "throughput_summary.json"
         )
 
+    model_provenance_dir = suite_dir / "model_provenance"
+    run_model_provenance_audit(
+        output_dir=model_provenance_dir,
+        run_id="tokenizer_audit",
+        model_ids=config.model_provenance_model_ids,
+    )
+    model_provenance_summary_path = (
+        model_provenance_dir / "tokenizer_audit" / "model_provenance_summary.json"
+    )
+
     rows = build_summary_rows({name: Path(path) for name, path in failurebench_runs.items()})
     table_dir = suite_dir / "tables"
     csv_path = table_dir / "failurebench_summary.csv"
@@ -188,12 +204,19 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     write_throughput_csv(throughput_rows, throughput_csv_path)
     write_throughput_latex(throughput_rows, throughput_tex_path)
 
+    model_rows = build_model_provenance_rows(model_provenance_summary_path)
+    model_csv_path = table_dir / "model_provenance_summary.csv"
+    model_tex_path = table_dir / "model_provenance_summary.tex"
+    write_model_provenance_csv(model_rows, model_csv_path)
+    write_model_provenance_latex(model_rows, model_tex_path)
+
     report = ExperimentSuiteReport(
         suite_dir=str(suite_dir),
         failurebench_runs=failurebench_runs,
         lifecycle_runs=lifecycle_runs,
         miniwob_runs=miniwob_runs,
         throughput_runs=throughput_runs,
+        model_provenance_run=str(model_provenance_summary_path),
         tables={
             "failurebench_summary_csv": str(csv_path),
             "failurebench_summary_tex": str(tex_path),
@@ -203,6 +226,8 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
             "miniwob_contract_summary_tex": str(miniwob_tex_path),
             "throughput_summary_csv": str(throughput_csv_path),
             "throughput_summary_tex": str(throughput_tex_path),
+            "model_provenance_summary_csv": str(model_csv_path),
+            "model_provenance_summary_tex": str(model_tex_path),
         },
     )
     (suite_dir / "suite_report.json").write_text(

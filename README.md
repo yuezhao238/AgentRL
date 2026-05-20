@@ -127,6 +127,12 @@ uv run agentrl-infra run-throughput-bench --policy retry_only --workers 8
 uv run agentrl-infra run-throughput-bench --policy failure_aware --workers 8
 ```
 
+Audit local model tokenizer provenance and token-native trace metadata:
+
+```bash
+uv run agentrl-infra run-model-provenance --models Qwen/Qwen3-4B,Qwen/Qwen3-8B
+```
+
 Run the local experiment suite and generate paper-ready CSV/LaTeX tables:
 
 ```bash
