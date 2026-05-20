@@ -53,6 +53,7 @@
     "enter-text",
     "search-engine"
   ],
-  "model_action_seeds": [1000],
+  "model_action_seeds": [1000, 1001, 1002],
+  "model_action_prompt_protocols": ["default", "no_thinking"],
   "model_action_max_new_tokens": 96
 }

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,15 +15,18 @@ from ..integrations.miniwob import (
     MiniWoBContractEnvironment,
     build_miniwob_task_specs,
 )
-from .model_generation import DEFAULT_GENERATION_MODEL_IDS, _load_causal_lm
+from .model_generation import DEFAULT_GENERATION_MODEL_IDS, LoadedCausalLM, _load_causal_lm
 from .model_provenance import encode_prompt, tokenizer_fingerprint
 
 DEFAULT_ACTION_TASKS = ["click-button", "enter-text", "search-engine"]
 DEFAULT_ACTION_SEEDS = [1000]
+ActionPromptProtocol = Literal["default", "no_thinking"]
+DEFAULT_ACTION_PROMPT_PROTOCOLS: list[ActionPromptProtocol] = ["no_thinking"]
 
 
 class ModelActionEpisodeRecord(BaseModel):
     model_id: str
+    prompt_protocol: str
     task_name: str
     seed: int
     success: bool
@@ -40,6 +43,7 @@ class ModelActionEpisodeRecord(BaseModel):
 
 class ModelActionSummary(BaseModel):
     model_id: str
+    prompt_protocol: str
     episode_count: int
     success_count: int
     parsed_action_count: int
@@ -61,24 +65,33 @@ def run_model_action_benchmark(
     model_ids: list[str] | None = None,
     task_names: list[str] | None = None,
     seeds: list[int] | None = None,
+    prompt_protocols: list[ActionPromptProtocol] | None = None,
     max_new_tokens: int = 96,
 ) -> list[ModelActionSummary]:
     model_ids = DEFAULT_GENERATION_MODEL_IDS if model_ids is None else model_ids
     task_names = DEFAULT_ACTION_TASKS if task_names is None else task_names
     seeds = DEFAULT_ACTION_SEEDS if seeds is None else seeds
+    prompt_protocols = (
+        DEFAULT_ACTION_PROMPT_PROTOCOLS if prompt_protocols is None else prompt_protocols
+    )
     run_dir = output_dir / run_id
     trace_dir = run_dir / "traces"
     trace_dir.mkdir(parents=True, exist_ok=True)
-    summaries = [
-        run_model_action_for_model(
-            model_id=model_id,
-            task_names=task_names,
-            seeds=seeds,
-            max_new_tokens=max_new_tokens,
-            trace_dir=trace_dir,
-        )
-        for model_id in model_ids
-    ]
+    summaries: list[ModelActionSummary] = []
+    for model_id in model_ids:
+        loaded = _load_causal_lm(model_id)
+        for prompt_protocol in prompt_protocols:
+            summaries.append(
+                run_model_action_with_loaded_model(
+                    loaded=loaded,
+                    model_id=model_id,
+                    prompt_protocol=prompt_protocol,
+                    task_names=task_names,
+                    seeds=seeds,
+                    max_new_tokens=max_new_tokens,
+                    trace_dir=trace_dir,
+                )
+            )
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "model_action_summary.json").write_text(
         json.dumps([summary.model_dump(mode="json") for summary in summaries], indent=2) + "\n",
@@ -90,6 +103,7 @@ def run_model_action_benchmark(
                 "model_ids": model_ids,
                 "task_names": task_names,
                 "seeds": seeds,
+                "prompt_protocols": prompt_protocols,
                 "max_new_tokens": max_new_tokens,
             },
             indent=2,
@@ -103,14 +117,36 @@ def run_model_action_benchmark(
 def run_model_action_for_model(
     *,
     model_id: str,
+    prompt_protocol: ActionPromptProtocol,
     task_names: list[str],
     seeds: list[int],
     max_new_tokens: int,
     trace_dir: Path,
 ) -> ModelActionSummary:
     loaded = _load_causal_lm(model_id)
+    return run_model_action_with_loaded_model(
+        loaded=loaded,
+        model_id=model_id,
+        prompt_protocol=prompt_protocol,
+        task_names=task_names,
+        seeds=seeds,
+        max_new_tokens=max_new_tokens,
+        trace_dir=trace_dir,
+    )
+
+
+def run_model_action_with_loaded_model(
+    *,
+    loaded: LoadedCausalLM,
+    model_id: str,
+    prompt_protocol: ActionPromptProtocol,
+    task_names: list[str],
+    seeds: list[int],
+    max_new_tokens: int,
+    trace_dir: Path,
+) -> ModelActionSummary:
     tokenizer_hash = tokenizer_fingerprint(loaded.tokenizer)
-    trace_path = trace_dir / f"{_safe_model_id(model_id)}.jsonl"
+    trace_path = trace_dir / f"{_safe_model_id(model_id)}__{prompt_protocol}.jsonl"
     log = EventLog.new(
         session_id=f"model-action-{_safe_model_id(model_id)}",
         task_id="model_action_miniwob_contract",
@@ -120,7 +156,11 @@ def run_model_action_for_model(
         EventType.SESSION_STARTED,
         model_version=model_id,
         tokenizer_hash=tokenizer_hash,
-        payload={"model_id": model_id, "max_new_tokens": max_new_tokens},
+        payload={
+            "model_id": model_id,
+            "prompt_protocol": prompt_protocol,
+            "max_new_tokens": max_new_tokens,
+        },
     )
     specs = build_miniwob_task_specs()
     records: list[ModelActionEpisodeRecord] = []
@@ -132,6 +172,7 @@ def run_model_action_for_model(
                 model=loaded.model,
                 tokenizer=loaded.tokenizer,
                 model_id=model_id,
+                prompt_protocol=prompt_protocol,
                 tokenizer_hash=tokenizer_hash,
                 log=log,
                 task_name=task_name,
@@ -150,6 +191,7 @@ def run_model_action_for_model(
     total_latency = sum(record.latency_seconds for record in records)
     return ModelActionSummary(
         model_id=model_id,
+        prompt_protocol=prompt_protocol,
         episode_count=len(records),
         success_count=sum(1 for record in records if record.success),
         parsed_action_count=sum(1 for record in records if record.parsed_action),
@@ -174,6 +216,7 @@ def _run_action_episode(
     model: Any,
     tokenizer: Any,
     model_id: str,
+    prompt_protocol: ActionPromptProtocol,
     tokenizer_hash: str,
     log: EventLog,
     task_name: str,
@@ -185,6 +228,7 @@ def _run_action_episode(
     generated = _generate_action_text(
         model=model,
         tokenizer=tokenizer,
+        prompt_protocol=prompt_protocol,
         prompt=_format_action_prompt(observation),
         max_new_tokens=max_new_tokens,
     )
@@ -194,7 +238,7 @@ def _run_action_episode(
         tokenizer_hash=tokenizer_hash,
         token_ids=generated["prompt_token_ids"],
         loss_mask=[0] * len(generated["prompt_token_ids"]),
-        payload={"task_name": task_name, "seed": seed},
+        payload={"task_name": task_name, "seed": seed, "prompt_protocol": prompt_protocol},
     )
     log.append(
         EventType.MODEL_RESPONDED,
@@ -215,6 +259,7 @@ def _run_action_episode(
         log.append_failure(parse_failure, payload={"task_name": task_name, "seed": seed})
         return _record(
             model_id=model_id,
+            prompt_protocol=prompt_protocol,
             task_name=task_name,
             seed=seed,
             generated=generated,
@@ -240,6 +285,7 @@ def _run_action_episode(
         log.append(EventType.SESSION_COMPLETED, payload={"task_name": task_name, "seed": seed})
     return _record(
         model_id=model_id,
+        prompt_protocol=prompt_protocol,
         task_name=task_name,
         seed=seed,
         generated=generated,
@@ -275,6 +321,7 @@ def _generate_action_text(
     *,
     model: Any,
     tokenizer: Any,
+    prompt_protocol: ActionPromptProtocol,
     prompt: str,
     max_new_tokens: int,
 ) -> dict[str, Any]:
@@ -283,7 +330,7 @@ def _generate_action_text(
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("torch is required for local model action benchmarks") from exc
 
-    prompt_token_ids = _encode_action_prompt(tokenizer, prompt)
+    prompt_token_ids = _encode_action_prompt(tokenizer, prompt, prompt_protocol)
     input_ids = torch.tensor([prompt_token_ids], device=model.device)
     attention_mask = torch.ones_like(input_ids)
     started = perf_counter()
@@ -341,29 +388,43 @@ def _format_action_prompt(observation: dict[str, Any]) -> str:
     )
 
 
-def _encode_action_prompt(tokenizer: Any, prompt: str) -> list[int]:
+def _encode_action_prompt(
+    tokenizer: Any,
+    prompt: str,
+    prompt_protocol: ActionPromptProtocol,
+) -> list[int]:
     chat = [{"role": "user", "content": prompt}]
     if getattr(tokenizer, "chat_template", None):
-        try:
+        if prompt_protocol == "no_thinking":
+            try:
+                rendered = tokenizer.apply_chat_template(
+                    chat,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=False,
+                )
+            except TypeError:
+                rendered = tokenizer.apply_chat_template(
+                    chat,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            return list(tokenizer.encode(rendered, add_special_tokens=False))
+        if prompt_protocol == "default":
             rendered = tokenizer.apply_chat_template(
                 chat,
                 tokenize=False,
                 add_generation_prompt=True,
-                enable_thinking=False,
             )
-        except TypeError:
-            rendered = tokenizer.apply_chat_template(
-                chat,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
-        return list(tokenizer.encode(rendered, add_special_tokens=False))
+            return list(tokenizer.encode(rendered, add_special_tokens=False))
+        raise ValueError(f"unsupported action prompt protocol: {prompt_protocol}")
     return encode_prompt(tokenizer, prompt)
 
 
 def _record(
     *,
     model_id: str,
+    prompt_protocol: str,
     task_name: str,
     seed: int,
     generated: dict[str, Any],
@@ -377,6 +438,7 @@ def _record(
     latency = generated["latency_seconds"]
     return ModelActionEpisodeRecord(
         model_id=model_id,
+        prompt_protocol=prompt_protocol,
         task_name=task_name,
         seed=seed,
         success=success,

@@ -1,2 +1,3 @@
-model_id,episodes,successes,parsed_actions,success_rate,parse_rate,invalid_actions,no_progress,generated_tokens,tokens_per_second,mean_logprob
-Qwen/Qwen3-4B,3,3,3,1.0,1.0,0,0,241,28.02989311856168,-0.0005539387417901666
+model_id,prompt_protocol,episodes,successes,parsed_actions,success_rate,parse_rate,invalid_actions,no_progress,generated_tokens,tokens_per_second,mean_logprob
+Qwen/Qwen3-4B,default,9,0,0,0.0,0.0,9,0,864,26.300044794330628,-0.031135599280789572
+Qwen/Qwen3-4B,no_thinking,9,9,9,1.0,1.0,0,0,727,30.48561573802291,-0.0003332518136199221

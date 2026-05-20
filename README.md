@@ -142,7 +142,11 @@ CUDA_VISIBLE_DEVICES=0 uv run agentrl-infra run-model-generation-smoke --models 
 Run a local model-action benchmark on MiniWoB contract tasks:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run agentrl-infra run-model-action-bench --models Qwen/Qwen3-4B
+CUDA_VISIBLE_DEVICES=0 uv run agentrl-infra run-model-action-bench \
+  --models Qwen/Qwen3-4B \
+  --tasks click-button,enter-text,search-engine \
+  --seeds 1000,1001,1002 \
+  --prompt-protocols default,no_thinking
 ```
 
 Run the local experiment suite and generate paper-ready CSV/LaTeX tables:

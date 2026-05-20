@@ -1,7 +1,8 @@
-\begin{tabular}{lrrrrrr}
+\begin{tabular}{llrrrrrr}
 \toprule
-Model & Success & Parse & Invalid & No Prog. & Tok/s & Mean Logp \\
+Model & Protocol & Success & Parse & Invalid & No Prog. & Tok/s & Mean Logp \\
 \midrule
-Qwen3-4B & 3/3 & 3/3 & 0 & 0 & 28.03 & -0.001 \\
+Qwen3-4B & default & 0/9 & 0/9 & 9 & 0 & 26.30 & -0.031 \\
+Qwen3-4B & no\_thinking & 9/9 & 9/9 & 0 & 0 & 30.49 & -0.000 \\
 \bottomrule
 \end{tabular}

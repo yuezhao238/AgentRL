@@ -404,7 +404,8 @@ Latency excludes model loading; Load s reports local checkpoint load time.}
 \subsection{Model-to-Action Contract Results}
 
 Table~\ref{tab:model-action-results} takes one step beyond free-form generation:
-Qwen3-4B is used as a browser-action policy on three MiniWoB contract tasks.
+Qwen3-4B is used as a browser-action policy on three MiniWoB contract tasks
+and three deterministic seeds per task.
 The runtime renders each browser observation, asks the model for a JSON browser
 action, parses the output, executes the action in the contract environment, and
 records request tokens, generated tokens, log-probabilities, proposed actions,
@@ -414,8 +415,8 @@ This experiment exposed a systems failure mode that is invisible in ordinary
 task-success reporting. With the default Qwen3 thinking template, the model
 spent the 96-token budget emitting reasoning text and produced zero parseable
 actions. When the runtime disables thinking in the chat template for structured
-action generation, the same model solves all three smoke tasks, with 3/3 parsed
-actions and 3/3 successful executions. This supports a concrete runtime
+action generation, the same model solves all nine episodes, with 9/9 parsed
+actions and 9/9 successful executions. This supports a concrete runtime
 requirement: rollout workers must control chat-template and decoding protocol
 per action channel, not simply call a model endpoint and hope for a valid tool
 call.
@@ -426,8 +427,8 @@ call.
 \resizebox{\linewidth}{!}{%
 \input{tables/model_action_summary.tex}
 }
-\caption{Qwen3-4B as a browser-action policy on MiniWoB contract tasks with
-thinking disabled for structured JSON action generation.}
+\caption{Qwen3-4B as a browser-action policy on MiniWoB contract tasks under
+default and thinking-disabled structured action protocols.}
 \label{tab:model-action-results}
 \end{table}
 

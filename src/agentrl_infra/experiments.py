@@ -72,6 +72,7 @@ class ExperimentSuiteConfig(BaseModel):
         default_factory=lambda: ["click-button", "enter-text", "search-engine"]
     )
     model_action_seeds: list[int] = Field(default_factory=lambda: [1000])
+    model_action_prompt_protocols: list[str] = Field(default_factory=lambda: ["no_thinking"])
     model_action_max_new_tokens: int = 96
 
 
@@ -213,6 +214,7 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
             model_ids=config.model_action_model_ids,
             task_names=config.model_action_tasks,
             seeds=config.model_action_seeds,
+            prompt_protocols=config.model_action_prompt_protocols,
             max_new_tokens=config.model_action_max_new_tokens,
         )
         model_action_summary_path = model_action_dir / "action_smoke" / "model_action_summary.json"

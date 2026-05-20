@@ -19,6 +19,7 @@ from .benchmarks.failurebench import (
 )
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
 from .benchmarks.model_action import (
+    DEFAULT_ACTION_PROMPT_PROTOCOLS,
     DEFAULT_ACTION_SEEDS,
     DEFAULT_ACTION_TASKS,
     run_model_action_benchmark,
@@ -306,6 +307,10 @@ def run_model_action_bench(
         ",".join(str(seed) for seed in DEFAULT_ACTION_SEEDS),
         help="Comma-separated integer seeds.",
     ),
+    prompt_protocols: str = typer.Option(
+        ",".join(DEFAULT_ACTION_PROMPT_PROTOCOLS),
+        help="Comma-separated prompt protocols: default,no_thinking.",
+    ),
     max_new_tokens: int = typer.Option(96, help="Maximum generated tokens per action."),
 ) -> None:
     """Use a local model as a browser-action policy on MiniWoB contract tasks."""
@@ -316,6 +321,7 @@ def run_model_action_bench(
         model_ids=[item for item in models.split(",") if item],
         task_names=[item for item in tasks.split(",") if item],
         seeds=[int(item) for item in seeds.split(",") if item],
+        prompt_protocols=[item for item in prompt_protocols.split(",") if item],
         max_new_tokens=max_new_tokens,
     )
     typer.echo(json.dumps([item.model_dump(mode="json") for item in summaries], indent=2))
