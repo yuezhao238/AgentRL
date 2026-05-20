@@ -14,6 +14,7 @@ from .artifacts import (
 from .baselines import RuntimeBaseline, evaluate_failurebench_baseline
 from .benchmarks.failurebench import run_failurebench_scheduled
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.model_action import run_model_action_benchmark
 from .benchmarks.model_generation import run_model_generation_smoke
 from .benchmarks.model_provenance import DEFAULT_MODEL_IDS, run_model_provenance_audit
 from .benchmarks.throughput import ThroughputPolicy, run_throughput_benchmark
@@ -22,6 +23,7 @@ from .metrics import save_metrics
 from .tables import (
     build_lifecycle_rows,
     build_miniwob_contract_rows,
+    build_model_action_rows,
     build_model_generation_rows,
     build_model_provenance_rows,
     build_summary_rows,
@@ -30,6 +32,8 @@ from .tables import (
     write_lifecycle_latex,
     write_miniwob_contract_csv,
     write_miniwob_contract_latex,
+    write_model_action_csv,
+    write_model_action_latex,
     write_model_generation_csv,
     write_model_generation_latex,
     write_model_provenance_csv,
@@ -63,6 +67,12 @@ class ExperimentSuiteConfig(BaseModel):
     model_provenance_model_ids: list[str] = Field(default_factory=lambda: list(DEFAULT_MODEL_IDS))
     model_generation_model_ids: list[str] = Field(default_factory=list)
     model_generation_max_new_tokens: int = 32
+    model_action_model_ids: list[str] = Field(default_factory=list)
+    model_action_tasks: list[str] = Field(
+        default_factory=lambda: ["click-button", "enter-text", "search-engine"]
+    )
+    model_action_seeds: list[int] = Field(default_factory=lambda: [1000])
+    model_action_max_new_tokens: int = 96
 
 
 class ExperimentSuiteReport(BaseModel):
@@ -73,6 +83,7 @@ class ExperimentSuiteReport(BaseModel):
     throughput_runs: dict[str, str] = Field(default_factory=dict)
     model_provenance_run: str | None = None
     model_generation_run: str | None = None
+    model_action_run: str | None = None
     tables: dict[str, str] = Field(default_factory=dict)
 
 
@@ -193,6 +204,19 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
             model_generation_dir / "generation_smoke" / "model_generation_summary.json"
         )
 
+    model_action_summary_path: Path | None = None
+    if config.model_action_model_ids:
+        model_action_dir = suite_dir / "model_action"
+        run_model_action_benchmark(
+            output_dir=model_action_dir,
+            run_id="action_smoke",
+            model_ids=config.model_action_model_ids,
+            task_names=config.model_action_tasks,
+            seeds=config.model_action_seeds,
+            max_new_tokens=config.model_action_max_new_tokens,
+        )
+        model_action_summary_path = model_action_dir / "action_smoke" / "model_action_summary.json"
+
     rows = build_summary_rows({name: Path(path) for name, path in failurebench_runs.items()})
     table_dir = suite_dir / "tables"
     csv_path = table_dir / "failurebench_summary.csv"
@@ -239,6 +263,15 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
         write_model_generation_csv(generation_rows, model_generation_csv_path)
         write_model_generation_latex(generation_rows, model_generation_tex_path)
 
+    model_action_csv_path: Path | None = None
+    model_action_tex_path: Path | None = None
+    if model_action_summary_path is not None:
+        action_rows = build_model_action_rows(model_action_summary_path)
+        model_action_csv_path = table_dir / "model_action_summary.csv"
+        model_action_tex_path = table_dir / "model_action_summary.tex"
+        write_model_action_csv(action_rows, model_action_csv_path)
+        write_model_action_latex(action_rows, model_action_tex_path)
+
     tables = {
         "failurebench_summary_csv": str(csv_path),
         "failurebench_summary_tex": str(tex_path),
@@ -254,6 +287,9 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
     if model_generation_csv_path and model_generation_tex_path:
         tables["model_generation_summary_csv"] = str(model_generation_csv_path)
         tables["model_generation_summary_tex"] = str(model_generation_tex_path)
+    if model_action_csv_path and model_action_tex_path:
+        tables["model_action_summary_csv"] = str(model_action_csv_path)
+        tables["model_action_summary_tex"] = str(model_action_tex_path)
 
     report = ExperimentSuiteReport(
         suite_dir=str(suite_dir),
@@ -265,6 +301,7 @@ def run_experiment_suite(config: ExperimentSuiteConfig) -> ExperimentSuiteReport
         model_generation_run=str(model_generation_summary_path)
         if model_generation_summary_path
         else None,
+        model_action_run=str(model_action_summary_path) if model_action_summary_path else None,
         tables=tables,
     )
     (suite_dir / "suite_report.json").write_text(

@@ -44,5 +44,15 @@
   "model_generation_model_ids": [
     "Qwen/Qwen3-4B"
   ],
-  "model_generation_max_new_tokens": 32
+  "model_generation_max_new_tokens": 32,
+  "model_action_model_ids": [
+    "Qwen/Qwen3-4B"
+  ],
+  "model_action_tasks": [
+    "click-button",
+    "enter-text",
+    "search-engine"
+  ],
+  "model_action_seeds": [1000],
+  "model_action_max_new_tokens": 96
 }

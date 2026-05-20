@@ -18,6 +18,11 @@ from .benchmarks.failurebench import (
     run_failurebench_scheduled,
 )
 from .benchmarks.lifecycle import ReusePolicy, run_lifecycle_benchmark
+from .benchmarks.model_action import (
+    DEFAULT_ACTION_SEEDS,
+    DEFAULT_ACTION_TASKS,
+    run_model_action_benchmark,
+)
 from .benchmarks.model_generation import (
     DEFAULT_GENERATION_MODEL_IDS,
     run_model_generation_smoke,
@@ -62,6 +67,10 @@ MODEL_OUTPUT_DIR_OPTION = typer.Option(
 GENERATION_OUTPUT_DIR_OPTION = typer.Option(
     Path("runs/model_generation"),
     help="Directory for local model generation smoke outputs.",
+)
+MODEL_ACTION_OUTPUT_DIR_OPTION = typer.Option(
+    Path("runs/model_action"),
+    help="Directory for model-action MiniWoB contract outputs.",
 )
 EXPERIMENT_OUTPUT_DIR_OPTION = typer.Option(
     Path("runs/experiments"),
@@ -279,6 +288,34 @@ def run_model_generation_smoke_cmd(
         output_dir=output_dir,
         run_id=run_id,
         model_ids=model_ids,
+        max_new_tokens=max_new_tokens,
+    )
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in summaries], indent=2))
+
+
+@app.command("run-model-action-bench")
+def run_model_action_bench(
+    output_dir: Path = MODEL_ACTION_OUTPUT_DIR_OPTION,
+    run_id: str | None = RUN_ID_OPTION,
+    models: str = typer.Option(
+        ",".join(DEFAULT_GENERATION_MODEL_IDS),
+        help="Comma-separated Hugging Face causal LM ids.",
+    ),
+    tasks: str = typer.Option(",".join(DEFAULT_ACTION_TASKS), help="Comma-separated tasks."),
+    seeds: str = typer.Option(
+        ",".join(str(seed) for seed in DEFAULT_ACTION_SEEDS),
+        help="Comma-separated integer seeds.",
+    ),
+    max_new_tokens: int = typer.Option(96, help="Maximum generated tokens per action."),
+) -> None:
+    """Use a local model as a browser-action policy on MiniWoB contract tasks."""
+    run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    summaries = run_model_action_benchmark(
+        output_dir=output_dir,
+        run_id=run_id,
+        model_ids=[item for item in models.split(",") if item],
+        task_names=[item for item in tasks.split(",") if item],
+        seeds=[int(item) for item in seeds.split(",") if item],
         max_new_tokens=max_new_tokens,
     )
     typer.echo(json.dumps([item.model_dump(mode="json") for item in summaries], indent=2))

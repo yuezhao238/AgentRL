@@ -1,0 +1,2 @@
+model_id,episodes,successes,parsed_actions,success_rate,parse_rate,invalid_actions,no_progress,generated_tokens,tokens_per_second,mean_logprob
+Qwen/Qwen3-4B,3,3,3,1.0,1.0,0,0,241,28.02989311856168,-0.0005539387417901666

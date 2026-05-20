@@ -102,6 +102,11 @@ agent RL rollouts.
   - [x] 21.54 generated tokens/sec after model load
   - [x] mean generated-token logprob -0.103, min logprob -1.331
   - [x] generated-token event traces include `logprobs`
+- [x] Real model-to-action MiniWoB contract smoke：
+  - [x] Qwen3-4B default thinking protocol: 0/3 parsed actions, 0/3 success
+  - [x] Qwen3-4B thinking-disabled structured action protocol: 3/3 parsed actions, 3/3 success
+  - [x] 241 generated tokens, 28.03 tokens/sec, mean logprob -0.001
+  - [x] traces include model request/response, proposed action, tool execution, reward, and typed failure events
 
 ## 1. MLSys 主线
 
@@ -177,6 +182,7 @@ agent RL rollouts.
 - [ ] vLLM rollout client
 - [x] tokenizer-level token-native trace export
 - [x] generation-level token-native trace export with logprobs for local model smoke
+- [x] model-generated browser action trace export on MiniWoB contract smoke
 - [ ] generation-level token-native trace export with logprobs for served SGLang/vLLM workers
 - [ ] lightweight GRPO prototype for smoke validation
 - [ ] connect to AgentRL/verl trainer for formal curves

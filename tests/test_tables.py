@@ -3,12 +3,14 @@ from __future__ import annotations
 from agentrl_infra.tables import (
     LifecycleTableRow,
     MiniWoBContractTableRow,
+    ModelActionTableRow,
     ModelGenerationTableRow,
     ModelProvenanceTableRow,
     TableRow,
     ThroughputTableRow,
     render_lifecycle_latex,
     render_miniwob_contract_latex,
+    render_model_action_latex,
     render_model_generation_latex,
     render_model_provenance_latex,
     render_summary_latex,
@@ -152,3 +154,26 @@ def test_render_model_generation_latex() -> None:
 
     assert "Qwen3-4B" in latex
     assert "Tok/s" in latex
+
+
+def test_render_model_action_latex() -> None:
+    latex = render_model_action_latex(
+        [
+            ModelActionTableRow(
+                model_id="Qwen/Qwen3-4B",
+                episodes=3,
+                successes=2,
+                parsed_actions=3,
+                success_rate=2 / 3,
+                parse_rate=1.0,
+                invalid_actions=1,
+                no_progress=0,
+                generated_tokens=120,
+                tokens_per_second=20.0,
+                mean_logprob=-0.2,
+            )
+        ]
+    )
+
+    assert "Qwen3-4B" in latex
+    assert "Parse" in latex

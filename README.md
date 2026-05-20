@@ -139,6 +139,12 @@ Run a local Transformers generation smoke test with token logprobs:
 CUDA_VISIBLE_DEVICES=0 uv run agentrl-infra run-model-generation-smoke --models Qwen/Qwen3-4B
 ```
 
+Run a local model-action benchmark on MiniWoB contract tasks:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run agentrl-infra run-model-action-bench --models Qwen/Qwen3-4B
+```
+
 Run the local experiment suite and generate paper-ready CSV/LaTeX tables:
 
 ```bash

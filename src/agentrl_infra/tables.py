@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .benchmarks.lifecycle import LifecycleSummary
+from .benchmarks.model_action import ModelActionSummary
 from .benchmarks.model_generation import ModelGenerationSummary
 from .benchmarks.model_provenance import ModelProvenanceSummary
 from .benchmarks.throughput import ThroughputSummary
@@ -90,6 +91,20 @@ class ModelGenerationTableRow(BaseModel):
     tokens_per_second: float
     mean_logprob: float
     min_logprob: float
+
+
+class ModelActionTableRow(BaseModel):
+    model_id: str
+    episodes: int
+    successes: int
+    parsed_actions: int
+    success_rate: float
+    parse_rate: float
+    invalid_actions: int
+    no_progress: int
+    generated_tokens: int
+    tokens_per_second: float
+    mean_logprob: float
 
 
 def build_summary_rows(inputs: dict[str, Path]) -> list[TableRow]:
@@ -317,6 +332,46 @@ def write_model_generation_latex(rows: list[ModelGenerationTableRow], path: Path
     path.write_text(render_model_generation_latex(rows), encoding="utf-8")
 
 
+def build_model_action_rows(path: Path) -> list[ModelActionTableRow]:
+    summaries = [
+        ModelActionSummary.model_validate(item)
+        for item in json.loads(path.read_text(encoding="utf-8"))
+    ]
+    rows: list[ModelActionTableRow] = []
+    for summary in summaries:
+        episodes = summary.episode_count
+        rows.append(
+            ModelActionTableRow(
+                model_id=summary.model_id,
+                episodes=episodes,
+                successes=summary.success_count,
+                parsed_actions=summary.parsed_action_count,
+                success_rate=summary.success_count / episodes if episodes else 0.0,
+                parse_rate=summary.parsed_action_count / episodes if episodes else 0.0,
+                invalid_actions=summary.invalid_action_count,
+                no_progress=summary.no_progress_count,
+                generated_tokens=summary.generated_tokens,
+                tokens_per_second=summary.tokens_per_second,
+                mean_logprob=summary.mean_logprob,
+            )
+        )
+    return rows
+
+
+def write_model_action_csv(rows: list[ModelActionTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(ModelActionTableRow.model_fields))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.model_dump())
+
+
+def write_model_action_latex(rows: list[ModelActionTableRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_model_action_latex(rows), encoding="utf-8")
+
+
 def render_summary_latex(rows: list[TableRow]) -> str:
     lines = [
         "\\begin{tabular}{lrrrrrrr}",
@@ -419,6 +474,24 @@ def render_model_generation_latex(rows: list[ModelGenerationTableRow]) -> str:
         lines.append(
             f"{_escape_latex(_short_model_id(row.model_id))} & {row.prompts} & "
             f"{row.prompt_tokens} & {row.generated_tokens} & {row.load_seconds:.1f} & "
+            f"{row.tokens_per_second:.2f} & {row.mean_logprob:.3f} \\\\"
+        )
+    lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    return "\n".join(lines)
+
+
+def render_model_action_latex(rows: list[ModelActionTableRow]) -> str:
+    lines = [
+        "\\begin{tabular}{lrrrrrr}",
+        "\\toprule",
+        "Model & Success & Parse & Invalid & No Prog. & Tok/s & Mean Logp \\\\",
+        "\\midrule",
+    ]
+    for row in rows:
+        lines.append(
+            f"{_escape_latex(_short_model_id(row.model_id))} & "
+            f"{row.successes}/{row.episodes} & {row.parsed_actions}/{row.episodes} & "
+            f"{row.invalid_actions} & {row.no_progress} & "
             f"{row.tokens_per_second:.2f} & {row.mean_logprob:.3f} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
