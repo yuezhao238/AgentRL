@@ -24,6 +24,7 @@ class SessionRuntimeConfig:
     max_turns: int = 32
     max_wall_time_seconds: float = 600.0
     max_repeated_actions: int = 3
+    max_no_progress_observations: int = 0
 
 
 @dataclass
@@ -37,6 +38,7 @@ class SessionRuntime:
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     turn_count: int = 0
     _recent_action_hashes: deque[str] = field(default_factory=deque)
+    _recent_observation_hashes: deque[str] = field(default_factory=deque)
 
     def __post_init__(self) -> None:
         self.event_log = EventLog.new(self.session_id, self.task_id, self.sample_id)
@@ -55,6 +57,24 @@ class SessionRuntime:
             self._recent_action_hashes.popleft()
 
         self.event_log.append(EventType.ACTION_PROPOSED, payload={"action": action})
+        failure = self._check_watchdogs()
+        if failure:
+            self.fail(failure)
+        return failure
+
+    def record_observation(self, observation: dict[str, Any]) -> FailureRecord | None:
+        if self.state != SessionState.RUNNING:
+            raise RuntimeError(f"session is not running: {self.state}")
+        self.event_log.append(EventType.OBSERVATION_RETURNED, payload={"observation": observation})
+
+        if self.config.max_no_progress_observations <= 0:
+            return None
+
+        observation_hash = sha256(repr(sorted(observation.items())).encode("utf-8")).hexdigest()
+        self._recent_observation_hashes.append(observation_hash)
+        while len(self._recent_observation_hashes) > self.config.max_no_progress_observations:
+            self._recent_observation_hashes.popleft()
+
         failure = self._check_watchdogs()
         if failure:
             self.fail(failure)
@@ -95,5 +115,11 @@ class SessionRuntime:
                     message="same action repeated beyond loop threshold",
                     details={"repeat_count": self.config.max_repeated_actions},
                 )
+        if len(self._recent_observation_hashes) == self.config.max_no_progress_observations:
+            if len(set(self._recent_observation_hashes)) == 1:
+                return FailureRecord(
+                    type=FailureType.NO_PROGRESS,
+                    message="same observation repeated beyond no-progress threshold",
+                    details={"repeat_count": self.config.max_no_progress_observations},
+                )
         return None
-

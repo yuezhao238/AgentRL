@@ -22,6 +22,18 @@ uv run pytest
 uv run ruff check .
 ```
 
+For the full experiment/runtime environment on the current A100 machine:
+
+```bash
+uv sync --extra dev --extra experiments --extra sglang
+```
+
+Switch to the backup vLLM backend with:
+
+```bash
+uv sync --extra dev --extra experiments --extra vllm
+```
+
 ## Quick Example
 
 ```python
@@ -32,8 +44,35 @@ log.append(EventType.SESSION_STARTED)
 log.append_failure(FailureRecord(type=FailureType.REPETITIVE_LOOP))
 ```
 
+## FailureBench
+
+Run the deterministic synthetic failure benchmark:
+
+```bash
+uv run agentrl-infra run-failurebench --output-dir runs/failurebench
+```
+
+This writes:
+
+- `config.json`
+- `traces/*.jsonl`
+- `metrics.json`
+- `summary.json`
+- `summary.md`
+
+Summarize an existing run:
+
+```bash
+uv run agentrl-infra summarize-runs runs/failurebench/<run_id>/metrics.json
+```
+
+Inspect a trace:
+
+```bash
+uv run agentrl-infra inspect-trace runs/failurebench/<run_id>/traces/<sample>.jsonl
+```
+
 ## Project Status
 
 This is an early research codebase. APIs are intentionally small and explicit so that
 the core abstractions can be evaluated before integrating with a full trainer/runtime.
-

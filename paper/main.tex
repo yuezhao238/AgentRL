@@ -1,0 +1,354 @@
+\documentclass{article}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{url}
+\usepackage{hyperref}
+
+\newcommand{\sys}{RolloutOS}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+\usepackage{mlsys2025}
+
+\mlsystitlerunning{Failure-Aware Rollout Systems for Long-Horizon Agent RL}
+
+\begin{document}
+
+\twocolumn[
+\mlsystitle{\sys: A Failure-Aware Rollout Runtime for Reproducible and Resource-Efficient Agent Reinforcement Learning}
+
+\begin{mlsysauthorlist}
+\mlsysauthor{Anonymous Authors}{anon}
+\end{mlsysauthorlist}
+
+\mlsysaffiliation{anon}{Anonymous Institution}
+\mlsyscorrespondingauthor{Anonymous Authors}{anonymous@example.com}
+\mlsyskeywords{ML Systems, Agent Reinforcement Learning, Runtime Systems, Replay, Failure Handling}
+
+\vskip 0.3in
+
+\begin{abstract}
+Long-horizon language-agent reinforcement learning is increasingly limited by rollout production rather than only by optimizer throughput.
+Rollouts interact with browsers, tools, sandboxes, memory, and external services, so expensive samples frequently fail because of runtime loops, invalid actions, timeouts, stale environments, context exhaustion, or unreplayable state drift.
+We present \sys, a rollout runtime that treats agent-environment interaction as a managed systems workload: sessions have explicit budgets and lifecycle state, failures have operational semantics, traces are recorded as replayable event streams, environments are managed through health and contamination checks, and scheduling optimizes useful trajectories per resource-hour.
+The key idea is to convert failed rollouts from opaque exceptions into typed, replayable, and schedulable systems artifacts.
+We evaluate \sys{} with a controllable failure benchmark and agent workloads spanning browser, tool-use, and code-sandbox environments, measuring useful rollout yield, replay success, failure attribution, tail latency, and environment cost.
+\end{abstract}
+]
+
+\printAffiliationsAndNotice{}
+
+\section{Introduction}
+
+Large language model agents are moving from single-turn preference optimization toward reinforcement learning (RL) in multi-turn, stateful environments.
+Recent Agent RL systems generate training data by repeatedly running policies against browsers, tool APIs, code sandboxes, web tasks, databases, and other external systems.
+In such workloads, the rollout layer is no longer a passive data loader.
+It is a distributed systems substrate that allocates environments, enforces budgets, validates actions, handles failures, records provenance, and decides which partial trajectories reach the optimizer.
+
+Existing Agent RL pipelines often treat this substrate as incidental engineering.
+The common implementation pattern is a task loop with a timeout, a message transcript, and a binary success/failure flag.
+This is insufficient for systems-scale rollout production.
+A failed 30-turn episode may have consumed scarce environment time, generated useful pre-failure behavior, corrupted a browser session, hit an external rate limit, or exposed a policy-attributable invalid action.
+Discarding it as a generic failed sample loses information that matters for scheduling, debugging, reproducibility, and training data quality.
+
+This paper argues that long-horizon Agent RL needs a rollout operating layer.
+The layer should manage sessions like processes: each rollout has resource ownership, lifecycle state, budgets, event logs, failure state, replay state, and cleanup semantics.
+It should distinguish policy failures from tool, scheduler, and environment failures.
+It should provide event-sourced provenance rather than only conversational messages.
+It should manage environment reuse without silently contaminating future samples.
+Finally, it should schedule work to maximize useful learning signal under resource constraints, not merely raw request throughput.
+
+We present \sys, a failure-aware rollout runtime for Agent RL workloads.
+\sys{} introduces four systems mechanisms.
+First, it defines a typed failure semantics layer that attaches operational meaning to runtime failures: whether a failure is policy-attributable, retryable, salvageable, training-relevant, or requires environment reset.
+Second, it records rollouts as append-only event streams containing model, tool, observation, reward, failure, and environment provenance.
+Third, it manages session and environment lifecycle using watchdogs, health checks, snapshot metadata, contamination checks, and cleanup policies.
+Fourth, it uses failure-aware scheduling to prioritize rollout requests by expected useful output rather than capacity alone.
+
+This is a systems paper, not a new RL algorithm.
+\sys{} is designed to sit beneath policy optimizers such as PPO, GRPO, RLOO, or other Agent RL objectives.
+The runtime changes how rollouts are produced, validated, replayed, and scheduled; it does not require changing the optimizer.
+
+This paper makes the following contributions:
+\begin{itemize}[leftmargin=*]
+    \item We characterize long-horizon Agent RL rollouts as a systems workload whose dominant waste modes include late failures, loops, timeouts, unreplayable traces, and contaminated environments.
+    \item We design \sys, a rollout runtime with typed failure semantics, event-sourced trace provenance, session watchdogs, environment lifecycle management, replay support, and useful-yield scheduling.
+    \item We implement a Python prototype with explicit adapters for tools and environments, JSONL event logs, replay reports, failure-aware scheduling, and command-line inspection utilities.
+    \item We propose and evaluate a controllable FailureBench workload together with browser, web-shopping, and code-sandbox agent workloads, using systems metrics such as useful trajectories/hour, failed rollout cost, replay success, contamination-induced failure, and tail latency.
+\end{itemize}
+
+\section{Background and Motivation}
+
+\subsection{Rollout Production in Agent RL}
+
+Agent RL differs from conventional RLHF-style data generation in three ways.
+First, the environment is long-horizon and partially observable.
+Second, state is external to the model: browser DOMs, filesystem trees, databases, memory stores, API quotas, and containers can all mutate during an episode.
+Third, a single rollout often contains many model calls and tool calls, so failures can occur long after substantial cost has already been incurred.
+
+These properties make rollout production a systems bottleneck.
+The training loop may request a group of rollouts for the same prompt or task, but the useful output depends on runtime behavior: whether workers remain alive, environments reset correctly, tool schemas are respected, model context stays within budget, and traces can be converted into valid training examples.
+
+\subsection{Why Message Logs Are Not Enough}
+
+Most agent frameworks can save a transcript of user, assistant, and tool messages.
+For RL systems, this transcript is incomplete.
+It does not reliably encode the model version, tokenizer, loss mask, log probabilities, tool schema version, environment snapshot, timeout, resource lease, or failure attribution.
+It also does not explain whether the failed sample should be retried, discarded, salvaged, or used as a negative training signal.
+
+\sys{} therefore uses an event stream as the primary record.
+Messages are represented as payloads inside typed events, not as the whole trace.
+This design allows downstream replay, auditing, scheduling, and training conversion to reason about the same execution artifact.
+
+\section{Characterization Study}
+\label{sec:characterization}
+
+\todo{Populate this section with measurements from raw baseline runs.}
+We first characterize rollout waste in baseline agent loops.
+The goal is not to show that any single task is difficult, but to expose systems failure modes that are obscured by binary task success metrics.
+
+\paragraph{Workloads.}
+We use four workloads.
+FailureBench is a synthetic controllable benchmark with oracle failure labels.
+MiniWoB++ exercises browser state, DOM interaction, reset latency, stale pages, and repeated actions.
+WebShop or AgentBench web shopping exercises tool-style web interaction, invalid search loops, and sparse rewards.
+A SWE-bench Verified debug subset exercises shell tools, filesystem mutation, setup failures, and long-running commands.
+
+\paragraph{Metrics.}
+We report completed trajectories/hour, useful trajectories/hour, successful trajectories/hour, failed rollout cost, environment-hours/success, zombie session rate, rollout tail latency, replay success rate, and percentage of failures with actionable attribution.
+For synthetic workloads, we also report failure detection precision, recall, macro F1, and turns wasted after the oracle failure point.
+
+\paragraph{Expected findings.}
+Our preliminary prototype motivates three hypotheses.
+First, many failures are detected late by timeout-only baselines, wasting turns and environment time.
+Second, message-only traces are often insufficient to classify replayability or root cause.
+Third, blind environment reuse can improve throughput while increasing contamination-induced failures.
+The rest of the paper designs \sys{} around these observations.
+
+\section{Design Goals}
+
+\sys{} targets five design goals.
+
+\textbf{G1: Failure-native execution.}
+Runtime failures must be represented as structured objects with operational semantics, not unstructured exception strings.
+The runtime must distinguish policy-attributable invalid actions from tool timeouts, environment crashes, scheduler cancellations, and context-limit failures.
+
+\textbf{G2: Replayable provenance.}
+Every rollout should produce an append-only event stream with sufficient metadata for exact replay when possible and state-equivalent replay otherwise.
+The trace should contain model, tokenizer, tool, reward, and environment provenance.
+
+\textbf{G3: Environment lifecycle safety.}
+The runtime should treat environment state as a managed resource.
+It must support reset, health check, snapshot metadata, reuse policy, and contamination detection.
+
+\textbf{G4: Useful-yield scheduling.}
+The scheduler should optimize useful trajectories per resource-hour.
+It should consider failure rate, task cost, worker capacity, reward variance, policy lag, and environment health.
+
+\textbf{G5: Optimizer independence.}
+The system should serve existing Agent RL optimizers.
+It should export trajectories and failure metadata without requiring a new RL objective.
+
+\section{System Overview}
+\label{sec:overview}
+
+Figure~\ref{fig:architecture} shows the \sys{} architecture.
+Trainers submit rollout requests to the runtime.
+The scheduler assigns requests to workers and environments.
+Each worker runs a managed session, invokes the policy and tools through wrappers, records events, detects failures, and emits trajectory artifacts.
+The replay engine can later re-execute or inspect traces under exact, model-substituted, or environment-substituted modes.
+
+\begin{figure}[t]
+\centering
+\fbox{
+\begin{minipage}{0.94\linewidth}
+\centering
+\vspace{0.4em}
+\textbf{Trainer / Policy Optimizer}\\
+\small PPO, GRPO, RLOO, or other Agent RL objective\\
+\vspace{0.4em}
+$\downarrow$ rollout requests \quad $\uparrow$ validated trajectories\\
+\vspace{0.4em}
+\textbf{\sys{} Runtime}\\
+\small scheduler \;|\; session manager \;|\; failure monitor \;|\; event log \;|\; replay engine\\
+\vspace{0.4em}
+$\downarrow$ actions, leases \quad $\uparrow$ observations, rewards, failures\\
+\vspace{0.4em}
+\textbf{Workers, Tools, and Environments}\\
+\small browsers, web tasks, code sandboxes, APIs, memory stores\\
+\vspace{0.4em}
+\end{minipage}
+}
+\caption{\sys{} treats Agent RL rollout production as a managed systems workload between the optimizer and stateful environments.}
+\label{fig:architecture}
+\end{figure}
+
+\section{Failure Semantics}
+
+Table~\ref{tab:failures} shows the initial failure taxonomy.
+Each failure type maps to semantics used by the runtime and downstream training export.
+For example, an invalid action is attributable to the policy and can produce a training signal, while an environment crash requires reset and should not penalize the policy.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\begin{tabular}{p{0.31\linewidth}cccc}
+\toprule
+\textbf{Failure} & \textbf{Policy} & \textbf{Retry} & \textbf{Salvage} & \textbf{Reset}\\
+\midrule
+Invalid action & yes & no & yes & no\\
+Tool timeout & no & yes & yes & no\\
+Tool execution error & mixed & yes & yes & no\\
+Environment crash & no & yes & no & yes\\
+Environment contamination & no & yes & no & yes\\
+Context limit & yes & no & yes & no\\
+Repetitive loop & yes & no & yes & no\\
+No progress & yes & no & yes & no\\
+Rate limit & no & yes & yes & no\\
+Scheduler cancelled & no & yes & yes & no\\
+\bottomrule
+\end{tabular}
+\caption{Failure semantics guide retry, replay, cleanup, scheduling, and training export.}
+\label{tab:failures}
+\end{table}
+
+The important design choice is that semantics are explicit and inspectable.
+This prevents the rollout layer from treating all failures as equivalent.
+It also avoids penalizing a policy for failures caused by infrastructure or environment nondeterminism.
+
+\section{Event-Sourced Traces}
+
+\sys{} records each trajectory as a JSONL event stream.
+Each event has a unique identifier, parent identifier, timestamp, session identifier, task identifier, optional sample identifier, optional model and tokenizer metadata, optional environment identifier, payload, token-level metadata, and optional failure record.
+
+Representative event types include session start, model request, model response, action proposal, tool validation, tool execution, observation return, reward emission, environment snapshot, failure detection, session cancellation, and session completion.
+
+This representation supports three replay modes.
+Exact replay reuses the same model and environment state when all provenance is available.
+Model-substituted replay fixes the environment and action history while replacing model calls, useful for debugging whether a stronger policy would recover.
+Environment-substituted replay fixes the model/action stream while using a fresh environment adapter, useful for detecting environment drift or nondeterminism.
+
+\section{Session and Environment Lifecycle}
+
+The session manager enforces per-rollout budgets and lifecycle transitions.
+A session starts in a created state, enters running after resource acquisition, and exits as completed, failed, or cancelled.
+Watchdogs detect excessive turns, wall-clock budget exhaustion, repeated actions, no-progress interaction, tool timeout, and worker cancellation.
+
+Environment lifecycle is managed separately from session state.
+An environment lease records which worker owns the state, which snapshot or reset operation produced it, and whether the state is healthy for reuse.
+Health checks validate that expected invariant state holds before reuse.
+Contamination checks detect mutations that invalidate future samples, such as stale browser state, dirty filesystem state, unexpected database rows, or leftover authentication.
+
+\todo{Implement and describe concrete environment adapter API: reset, snapshot, restore, health\_check, contamination\_check, step, close.}
+
+\section{Useful-Yield Scheduling}
+
+Capacity-only schedulers maximize the number of assigned rollout requests but ignore whether those requests are likely to produce useful trajectories.
+\sys{} instead scores each candidate request using task statistics:
+\begin{equation}
+\begin{split}
+score(r, t) = &\; priority(r) + \alpha \cdot reward\_var(t) \\
+& - \beta \cdot failure\_rate(t) - \gamma \cdot cost(r,t) \\
+& - \delta \cdot policy\_lag(t).
+\end{split}
+\end{equation}
+
+This score is intentionally simple.
+The goal is not to introduce a new scheduling algorithm, but to expose failure and cost signals that capacity-only systems ignore.
+The evaluation compares this policy against FIFO, capacity-only, retry-only, and cost-only baselines.
+
+\section{Implementation}
+
+We implement a prototype in Python 3.12.
+The current codebase contains five core modules.
+\texttt{failures.py} defines the failure taxonomy and semantics.
+\texttt{events.py} defines the event model and JSONL persistence.
+\texttt{session.py} implements the session runtime and watchdogs.
+\texttt{replay.py} generates replayability reports from traces.
+\texttt{scheduler.py} implements the initial failure-aware scheduler.
+The package exposes a small command-line interface for inspecting traces.
+
+\todo{Expand implementation once runner, FailureBench, replay execution, metrics collector, and environment adapters are implemented.}
+
+\section{Evaluation}
+\label{sec:evaluation}
+
+We evaluate \sys{} around four questions.
+
+\textbf{Q1: Does failure-aware execution detect runtime failures earlier and more accurately?}
+On FailureBench, we compare timeout-only and message-only baselines against \sys{}.
+Metrics are precision, recall, macro F1 by failure type, mean time to detection, and turns wasted after oracle failure.
+
+\textbf{Q2: Do event-sourced traces improve replay and debugging?}
+We compare raw stdout/stderr, message-only traces, and \sys{} event traces.
+Metrics are replay success rate, root-cause attribution accuracy, actionable diagnosis rate, and time-to-root-cause.
+
+\textbf{Q3: Does useful-yield scheduling improve rollout production?}
+We compare FIFO, capacity-only, retry-only, and \sys{} scheduling.
+Metrics are useful trajectories/hour, failed rollout cost, environment-hours/success, zombie session rate, and tail latency.
+
+\textbf{Q4: Can environment lifecycle management reduce cost without increasing contamination?}
+We compare recreate-every-episode, blind reuse, fixed-TTL reuse, health-check reuse, and contamination-aware reuse.
+Metrics are reset latency, environment utilization, contamination rate, contamination-induced failure, and cost per successful trajectory.
+
+\begin{table}[t]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llll}
+\toprule
+\textbf{Experiment} & \textbf{Workload} & \textbf{Baselines} & \textbf{Primary metric}\\
+\midrule
+Failure detection & FailureBench & timeout, message trace & macro F1\\
+Replay/debugging & FailureBench, MiniWoB & raw, message trace & replay success\\
+Scheduling & FailureBench, WebShop & FIFO, capacity, retry & useful traj/hr\\
+Lifecycle & MiniWoB, SWE-bench & recreate, blind reuse & cost/success\\
+\bottomrule
+\end{tabular}%
+}
+\caption{Evaluation plan for a systems-focused MLSys submission.}
+\label{tab:eval-plan}
+\end{table}
+
+\todo{Replace Table~\ref{tab:eval-plan} with measured results once experiments are implemented.}
+
+\section{Discussion}
+
+\paragraph{Relationship to RL algorithms.}
+\sys{} does not claim that failure semantics alone solve policy learning.
+Instead, it provides cleaner inputs to existing optimizers and more reliable rollout production.
+Training improvements, when present, should be interpreted as downstream effects of better systems behavior: fewer invalid samples, better partial trajectory salvage, and less environment waste.
+
+\paragraph{Failure semantics can bias learning.}
+Structured failures can introduce reward hacking if negative rewards are assigned naively.
+\sys{} therefore separates runtime semantics from optimizer policy.
+The runtime records whether a failure is training-relevant; the training exporter decides how to convert that signal.
+
+\paragraph{Replay is conditional.}
+Exact replay is only possible when the model, tokenizer, environment state, tool versions, and external responses are controlled.
+The system therefore reports determinism levels rather than promising universal exact replay.
+
+\section{Related Work}
+
+\todo{Expand related work with complete author metadata before submission. MLSys 2026 requires each reference to list all authors explicitly.}
+Agent RL frameworks motivate the need for high-throughput multi-turn rollout production~\citep{zhang2025agentrl,prorlagent2026}.
+Agent-system reliability studies identify scheduling, context degradation, tool execution, and lifecycle bugs as recurring failure modes~\citep{agentrm2026,bugstudy2026,wherellmagentsfail2025}.
+\sys{} is complementary to these efforts: it provides a rollout runtime substrate and measurement framework rather than a new agent policy or reward model.
+
+\section{Conclusion}
+
+Long-horizon Agent RL turns rollout production into a systems problem.
+Failures, replayability, environment lifecycle, and scheduling decisions directly affect the cost and quality of training data.
+\sys{} addresses this gap by treating rollouts as managed runtime sessions with typed failure semantics, event-sourced traces, replay support, environment lifecycle management, and useful-yield scheduling.
+The resulting system is designed to make failed rollouts observable, attributable, replayable when possible, and useful to scheduling and debugging.
+
+\bibliography{refs}
+\bibliographystyle{mlsys2025}
+
+\end{document}
